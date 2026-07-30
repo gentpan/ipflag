@@ -4,6 +4,8 @@
 import { useEffect, useState } from "react";
 import { getTranslation, languages, type Language } from "./translations";
 
+const CHROME_STORE_URL = "https://chromewebstore.google.com/detail/ipgeo-flag/aaclbfgifnkbhkokgajglhgphjjjcoaa";
+
 function FlagMark() {
   return <span className="flag-mark" aria-hidden="true"><span /><span /><span /></span>;
 }
@@ -53,7 +55,7 @@ export default function Home() {
         </nav>
         <div className="header-tools">
           <LanguageSwitcher language={language} onChange={changeLanguage} />
-          <a className="header-cta" href="#install">{t.getFlag} <span aria-hidden="true">↗</span></a>
+          <a className="header-cta" href={CHROME_STORE_URL} target="_blank" rel="noreferrer">{t.getFlag} <span aria-hidden="true">↗</span></a>
         </div>
       </header>
 
@@ -63,7 +65,7 @@ export default function Home() {
           <h1>{t.heroTitle}<span className="hero-accent">{t.heroAccent}</span></h1>
           <p className="hero-intro">{t.heroIntro}</p>
           <div className="hero-actions">
-            <a className="primary-button" href="#install">{t.addChrome} <span aria-hidden="true">↗</span></a>
+            <a className="primary-button" href={CHROME_STORE_URL} target="_blank" rel="noreferrer">{t.addChrome} <span aria-hidden="true">↗</span></a>
             <a className="text-link" href="#how-it-works">{t.seeHow} <span aria-hidden="true">↓</span></a>
           </div>
           <div className="hero-proof" aria-label="Product attributes">
@@ -101,7 +103,7 @@ export default function Home() {
 
       <section className="privacy shell" id="privacy"><div className="privacy-card"><div><p className="eyebrow"><span /> {t.privacyEyebrow}</p><h2>{t.privacyTitle[0]}<br />{t.privacyTitle[1]}</h2></div><div className="privacy-copy"><p>{t.privacyCopy}</p><ul>{t.privacyChecks.map((item) => <li key={item}><span>✓</span> {item}</li>)}</ul><a href="/privacy/">{t.readPrivacy} <span aria-hidden="true">→</span></a></div></div></section>
 
-      <section className="final-cta" id="install"><div className="final-flags" aria-hidden="true"><img src="/flag-de.svg" alt="" /><img src="/flag-us.svg" alt="" /><img src="/flag-jp.svg" alt="" /><img src="/flag-cn.svg" alt="" /><img src="/flag-sg.svg" alt="" /><img src="/flag-hk.svg" alt="" /></div><div className="shell final-content"><p className="eyebrow light"><span /> {t.coming}</p><h2>{t.finalTitle}</h2><p>{t.finalCopy}</p><span className="store-button" aria-label={t.comingSoon}><b className="chrome-dot" /><span><small>{t.comingSoon}</small>Chrome Web Store</span></span></div></section>
+      <section className="final-cta" id="install"><div className="final-flags" aria-hidden="true"><img src="/flag-de.svg" alt="" /><img src="/flag-us.svg" alt="" /><img src="/flag-jp.svg" alt="" /><img src="/flag-cn.svg" alt="" /><img src="/flag-sg.svg" alt="" /><img src="/flag-hk.svg" alt="" /></div><div className="shell final-content"><p className="eyebrow light"><span /> {t.coming}</p><h2>{t.finalTitle}</h2><p>{t.finalCopy}</p><a className="store-button" href={CHROME_STORE_URL} target="_blank" rel="noreferrer" aria-label={t.comingSoon}><b className="chrome-dot" /><span><small>{t.comingSoon}</small>Chrome Web Store</span></a></div></section>
 
       <footer className="site-footer shell"><a className="brand" href="#top"><FlagMark /><span>IP FLAG</span></a><p>{t.footerCopy}</p><div><a href="/privacy/">{t.footerPrivacy}</a><a href="https://db-ip.com" target="_blank" rel="noreferrer">{t.dbIpAttribution}</a><span>© 2026 IP Flag</span></div></footer>
     </main>

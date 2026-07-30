@@ -9,6 +9,7 @@ It adds the server country flag to the browser toolbar and exposes the resolved 
 ## Product
 
 - Website: <https://ipflag.io>
+- Chrome Web Store: <https://chromewebstore.google.com/detail/ipgeo-flag/aaclbfgifnkbhkokgajglhgphjjjcoaa>
 - Privacy policy: <https://ipflag.io/privacy>
 - English store name: `IP Flag – Website IP & Server Location`
 - 中文名称：`IP Flag - 网站服务器国旗与 IP 信息`
