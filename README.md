@@ -21,7 +21,9 @@ It adds the server country flag to the browser toolbar and exposes the resolved 
 3. Choose **Load unpacked**.
 4. Select this repository directory.
 
-The extension uses `https://api.cnip.io/geoip/` for server geolocation and stores lookup results in session storage.
+The extension uses the IP Flag API (`https://api.ipflag.io/domain/:domain`) for server geolocation and falls back to the legacy CNIP endpoint if the private API is temporarily unavailable. Direct IP lookups are available at `https://api.ipflag.io/ip/:ip`. Results are cached in session storage.
+
+The API combines the local IP2Location database when configured and the monthly DB-IP Lite city database as a second source. DB-IP Lite is licensed under CC BY 4.0; the website includes the required attribution link.
 
 ## Website development
 

@@ -26,7 +26,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(origin),
     title: "IP Flag — Website IP & Server Location",
     description:
-      "See the country, IP, ASN, ISP, city, timezone and map behind every website — directly from your browser toolbar.",
+      "See where every website is hosted, with its country, IP, network and server location.",
     icons: {
       icon: "/ipflag-icon.png",
       shortcut: "/ipflag-icon.png",

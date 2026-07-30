@@ -1,5 +1,6 @@
 const $ = (id) => document.getElementById(id);
-const API_BASE = 'https://api.cnip.io/geoip/';
+const API_BASE = 'https://api.ipflag.io/domain/';
+const FALLBACK_API_BASE = 'https://api.cnip.io/geoip/';
 // Keep provider credentials out of the public repository. A map is shown only
 // when a private build supplies IPFLAG_MAPBOX_TOKEN at runtime.
 const MAPBOX_TOKEN = globalThis.IPFLAG_MAPBOX_TOKEN || '';
@@ -95,8 +96,14 @@ async function init() {
 
   // 没缓存，直接请求
   try {
-    const res = await fetch(`${API_BASE}${hostname}`);
-    if (!res.ok) throw new Error('API error');
+    let res;
+    try {
+      res = await fetch(`${API_BASE}${hostname}`);
+      if (!res.ok) throw new Error('IP Flag API error');
+    } catch {
+      res = await fetch(`${FALLBACK_API_BASE}${hostname}`);
+      if (!res.ok) throw new Error('Fallback API error');
+    }
     const data = await res.json();
     await chrome.storage.session.set({ [key]: { data, ts: Date.now() } });
     render(data, hostname);

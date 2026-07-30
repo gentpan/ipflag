@@ -1,0 +1,9 @@
+[Unit]
+Description=Monthly DB-IP Lite update for IP Flag
+
+[Timer]
+OnCalendar=*-*-03 04:20:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

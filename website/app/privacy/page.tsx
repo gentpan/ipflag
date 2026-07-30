@@ -13,7 +13,7 @@ const sections = [
   },
   {
     title: "Data processed",
-    body: "To provide this feature, IP Flag sends the current website hostname to the cnip.io geolocation API. The response can include the resolved server IP, country, region, city, ASN, ISP, timezone and approximate coordinates. This describes the website server, not your physical location.",
+        body: "To provide this feature, IP Flag sends the current website hostname to the IP Flag geolocation API. The response can include the resolved server IP, country, region, city, ASN, ISP, timezone and approximate coordinates. This describes the website server, not your physical location.",
   },
   {
     title: "Local caching",
@@ -25,7 +25,7 @@ const sections = [
   },
   {
     title: "Third-party services",
-    body: "IP Flag uses cnip.io for server geolocation and a map image service to display the approximate server location. Opening optional external links is always initiated by the user.",
+        body: "IP Flag uses its own geolocation API, backed by local IP databases including IP2Location and DB-IP Lite, and a map image service to display the approximate server location. DB-IP attribution is provided on this site. Opening optional external links is always initiated by the user.",
   },
   {
     title: "Changes",
@@ -63,6 +63,7 @@ export default function PrivacyPage() {
       </article>
       <footer className="legal-footer shell">
         <span>© 2026 IP Flag</span>
+        <a href="https://db-ip.com" target="_blank" rel="noreferrer">IP Geolocation by DB-IP</a>
         <a href="https://ipflag.io">ipflag.io</a>
       </footer>
     </main>

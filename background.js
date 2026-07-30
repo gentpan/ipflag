@@ -1,4 +1,5 @@
-const API_BASE = 'https://api.cnip.io/geoip/';
+const API_BASE = 'https://api.ipflag.io/domain/';
+const FALLBACK_API_BASE = 'https://api.cnip.io/geoip/';
 const CACHE_TTL = 10 * 60 * 1000;
 const memCache = new Map(); // 内存缓存，最快
 
@@ -24,8 +25,14 @@ async function fetchAndCache(hostname) {
   }
 
   // 3. API 请求
-  const res = await fetch(`${API_BASE}${hostname}`);
-  if (!res.ok) return null;
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${hostname}`);
+    if (!res.ok) throw new Error(`IP Flag API ${res.status}`);
+  } catch {
+    res = await fetch(`${FALLBACK_API_BASE}${hostname}`);
+    if (!res.ok) return null;
+  }
   const data = await res.json();
   const entry = { data, ts: Date.now() };
   memCache.set(hostname, entry);

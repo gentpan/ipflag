@@ -9,6 +9,8 @@ website/dist/
 website/outputs/
 website/.wrangler/
 website/.vinext/
+api/node_modules/
+api/data/
 website/.env*
 
 # Local editor and OS files

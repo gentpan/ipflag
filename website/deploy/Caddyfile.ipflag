@@ -10,3 +10,15 @@ ipflag.io {
 
 	reverse_proxy 127.0.0.1:4317
 }
+
+api.ipflag.io {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	reverse_proxy 127.0.0.1:4320
+}
