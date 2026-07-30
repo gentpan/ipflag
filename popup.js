@@ -4,6 +4,8 @@ const API_BASE = 'https://api.ipflag.io/';
 // when a private build supplies IPFLAG_MAPBOX_TOKEN at runtime.
 const MAPBOX_TOKEN = globalThis.IPFLAG_MAPBOX_TOKEN || '';
 const CACHE_TTL = 10 * 60 * 1000;
+const FLAG_STYLE_KEY = 'flagStyle';
+const DEFAULT_FLAG_STYLE = 'rect';
 
 function isSpecialPage(url) {
   return !url || /^(chrome|chrome-extension|edge|about|file|devtools|browser):/.test(url);
@@ -31,12 +33,28 @@ function getDisplayName(data, flagCode) {
   return data.country || data.country_code || '--';
 }
 
-function render(data, hostname) {
+function setFlagStyle(style) {
+  const normalized = style === 'square' ? 'square' : DEFAULT_FLAG_STYLE;
+  const select = $('flag-style');
+  if (select) select.value = normalized;
+  const flag = $('flag-img');
+  if (flag) {
+    flag.classList.toggle('flag-square', normalized === 'square');
+    flag.dataset.style = normalized;
+  }
+  return normalized;
+}
+
+function render(data, hostname, style) {
   $('loading').style.display = 'none';
   $('content').style.display = 'block';
 
   const flagCode = getFlagCode(data);
-  $('flag-img').src = `flags/4x3/${flagCode}.svg`;
+  const normalizedStyle = setFlagStyle(style);
+  $('flag-img').dataset.flagCode = flagCode;
+  $('flag-img').src = normalizedStyle === 'square'
+    ? `flags/1x1/${flagCode}.png`
+    : `flags/4x3/${flagCode}.svg`;
   $('country').textContent = getDisplayName(data, flagCode);
   $('country-code').textContent = flagCode.toUpperCase();
   $('city-region').textContent = [data.city, data.region].filter(Boolean).join(', ') || '--';
@@ -85,11 +103,25 @@ async function init() {
 
   const hostname = new URL(tab.url).hostname;
   const key = `geo_${hostname}`;
+  const settings = await chrome.storage.sync.get({ [FLAG_STYLE_KEY]: DEFAULT_FLAG_STYLE });
+  let flagStyle = setFlagStyle(settings[FLAG_STYLE_KEY]);
+
+  $('flag-style').addEventListener('change', async (event) => {
+    flagStyle = setFlagStyle(event.target.value);
+    await chrome.storage.sync.set({ [FLAG_STYLE_KEY]: flagStyle });
+    const current = $('flag-img');
+    const flagCode = current?.dataset.flagCode;
+    if (flagCode) {
+      current.src = flagStyle === 'square'
+        ? `flags/1x1/${flagCode}.png`
+        : `flags/4x3/${flagCode}.svg`;
+    }
+  });
 
   // 直接读 session storage
   const store = await chrome.storage.session.get(key);
   if (store[key] && Date.now() - store[key].ts < CACHE_TTL) {
-    render(store[key].data, hostname);
+    render(store[key].data, hostname, flagStyle);
     return;
   }
 
@@ -99,7 +131,7 @@ async function init() {
     if (!res.ok) throw new Error('IP Flag API error');
     const data = await res.json();
     await chrome.storage.session.set({ [key]: { data, ts: Date.now() } });
-    render(data, hostname);
+    render(data, hostname, flagStyle);
   } catch {
     showError('无法获取 IP 信息');
   }

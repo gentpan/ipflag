@@ -21,6 +21,7 @@ It adds the server country flag to the browser toolbar and reveals the resolved 
 - ASN, ISP, city, region, timezone and coordinates
 - Optional map preview in private builds with a runtime map token
 - Session caching for faster repeated lookups
+- User-selectable rectangular or square flag display in the popup card
 - Multilingual product website: English, Simplified Chinese, Traditional Chinese, Japanese, German, Russian, French and Spanish
 - No account, sign-up, advertising profile or sale of user data
 
