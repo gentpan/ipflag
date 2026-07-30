@@ -26,7 +26,7 @@ It adds the server country flag to the browser toolbar and reveals the resolved 
 
 ## Geolocation API
 
-The extension uses the IP Flag API first and falls back to the legacy CNIP endpoint if the private API is temporarily unavailable.
+The extension uses the IP Flag API at `https://api.ipflag.io/` for all lookups.
 
 ```text
 GET https://api.ipflag.io/domain/example.com
