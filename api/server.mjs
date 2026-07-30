@@ -101,7 +101,6 @@ function fromDbIp(ip) {
     city: asText(record.city?.names?.en),
     latitude: location.latitude ?? null,
     longitude: location.longitude ?? null,
-    source: "db-ip-lite",
   };
 }
 
@@ -112,7 +111,6 @@ function fromDbIpAsn(ip) {
     ip,
     asn: record.autonomous_system_number ? `AS${record.autonomous_system_number}` : "",
     isp: asText(record.autonomous_system_organization),
-    source: "db-ip-lite-asn",
   };
 }
 
@@ -133,7 +131,6 @@ function fromIp2Location(ip) {
     timezone: asText(result.timeZone),
     asn: asText(result.asn),
     isp: asText(result.isp),
-    source: "ip2location",
   };
 }
 
@@ -204,7 +201,7 @@ async function handle(request, response) {
   if (request.method !== "GET") return sendJson(response, 405, { error: "method_not_allowed" });
   if (!rateLimit(request)) return sendJson(response, 429, { error: "rate_limited", message: "Too many requests. Try again shortly." }, { "Retry-After": "60" });
   if (url.pathname === "/" || url.pathname === "/health") {
-    return sendJson(response, 200, { ok: true, service: "IP Flag Geo API", sources: { ip2location: Boolean(ip2Location), db_ip: Boolean(dbIpLookup), db_ip_asn: Boolean(dbIpAsnLookup) } });
+    return sendJson(response, 200, { ok: true, service: "IP Flag Geo API" });
   }
 
   const parts = url.pathname.split("/").filter(Boolean);
