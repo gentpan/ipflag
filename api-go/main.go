@@ -273,7 +273,7 @@ func (service *geoService) handler(limiter *limiter) http.Handler {
 		}
 		pathParts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
 		if request.URL.Path == "/" || request.URL.Path == "/health" {
-			jsonResponse(writer, http.StatusOK, map[string]any{"ok": true, "service": "IP Flag Geo API", "database": "DB-IP Lite"})
+			jsonResponse(writer, http.StatusOK, map[string]any{"ok": true, "service": "IP Flag Geo API"})
 			return
 		}
 		endpoint := pathParts[0]
