@@ -1,48 +1,50 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
   <div id="app">
-    <div class="brand-bar">
-      <span class="brand-mark">IP</span>
-      <div>
-        <strong>IP Flag</strong>
-        <span>一眼查看网站服务器所在国家</span>
-      </div>
-    </div>
-    <div class="display-settings">
-      <label for="flag-style">卡片国旗样式</label>
-      <select id="flag-style" aria-label="卡片国旗样式">
-        <option value="rect">长方形</option>
-        <option value="square">正方形</option>
-      </select>
-    </div>
+    <span id="coords" hidden></span>
     <div id="loading" class="loading">
       <div class="spinner"></div>
     </div>
 
     <div id="error" class="state-msg" style="display:none">
-      <span id="error-msg"></span>
+      <div id="error-msg" class="error-text"></div>
+      <button id="error-retry" class="error-retry" data-i18n="retry">Retry</button>
     </div>
 
     <div id="content" style="display:none">
       <div class="header">
-        <img id="flag-img" class="flag" alt="">
+        <img id="flag-img" class="flag" src="icons/icon48.png" alt="">
         <div class="header-info">
-          <div id="country" class="country-name"></div>
+          <div class="country-row">
+            <div id="country" class="country-name"></div>
+            <div id="country-code" class="country-code"></div>
+          </div>
           <div id="city-region" class="city-text"></div>
         </div>
-        <div id="country-code" class="country-code"></div>
+        <div class="header-actions">
+          <a id="promo-link" class="header-icon-link" href="https://cleanip.io" target="_blank" rel="noopener noreferrer" data-i18n-title="checkIpReputation">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </a>
+          <a class="header-icon-link" href="https://flagcdn.io" target="_blank" rel="noopener noreferrer" data-i18n-title="flagSource">
+            <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          </a>
+        </div>
       </div>
 
       <div id="map-container" class="map-wrap" style="display:none">
+        <div id="map-grid" class="map-grid"></div>
+        <div id="map-pin" class="map-pin"></div>
         <div id="map-loading" class="map-loading">
           <div class="spinner"></div>
         </div>
-        <img id="map-img" class="map" alt="" style="display:none">
+      </div>
+      <div id="map-context-menu" class="map-context-menu" hidden>
+        <button id="map-open" type="button" data-i18n="openInMaps">Open in Maps</button>
       </div>
 
       <div class="info-list">
@@ -52,39 +54,50 @@
           <span class="icon-cell"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
           <span class="icon-cell"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
           <span class="icon-cell"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
-          <span class="icon-cell"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+          <span class="icon-cell"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span>
         </div>
         <div class="label-col">
           <span class="label-cell">IP</span>
-          <span class="label-cell">域名</span>
+          <span class="label-cell" data-i18n="domain">Domain</span>
           <span class="label-cell">ASN</span>
           <span class="label-cell">ISP</span>
-          <span class="label-cell">时区</span>
-          <span class="label-cell">坐标</span>
+          <span class="label-cell" data-i18n="timezone">Time zone</span>
+          <span class="label-cell">SSL</span>
         </div>
         <div class="val-col">
-          <span id="ip" class="value"></span>
-          <span id="domain" class="value domain"></span>
-          <span id="asn" class="value"></span>
-          <span id="isp" class="value"></span>
-          <span id="timezone" class="value"></span>
-          <span id="coords" class="value"></span>
+          <div class="value-row">
+            <a id="ip" class="value-main link-value" href="#" target="_blank" rel="noopener noreferrer"></a>
+            <span id="ip-source" class="source-badge"></span>
+            <button class="copy-btn" type="button" data-copy-target="ip" data-i18n-title="copy">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
+          <div class="value-row">
+            <a id="domain" class="value-main domain link-value" href="#" target="_blank" rel="noopener noreferrer"></a>
+            <button class="copy-btn" type="button" data-copy-target="domain" data-i18n-title="copy">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
+          <div class="value-row">
+            <a id="asn" class="value-main link-value" href="#" target="_blank" rel="noopener noreferrer"></a>
+            <button class="copy-btn" type="button" data-copy-target="asn" data-i18n-title="copy">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
+          <span id="isp" class="value-row plain-value"></span>
+          <span id="timezone" class="value-row plain-value"></span>
+          <div class="value-row ssl-row">
+            <button id="ssl-toggle" class="value-main ssl-value" type="button" aria-expanded="false"></button>
+            <button class="copy-btn" type="button" data-copy-target="ssl" data-i18n-title="copy">
+              <svg viewBox="0 0 24 24"><rect x="9" y="9" width="10" height="10" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"/></svg>
+            </button>
+          </div>
         </div>
       </div>
-      <!-- 底部推广 -->
-      <div class="promo-group">
-        <a id="promo-link" class="promo" href="#" target="_blank">
-          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-          <span class="promo-text">检测 IP 纯净度</span>
-          <span class="promo-badge">CleanIP.io</span>
-          <svg class="promo-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-        </a>
-        <a class="promo" href="https://flagcdn.io" target="_blank">
-          <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-          <span class="promo-text">国旗图标来源</span>
-          <span class="promo-badge">Flagcdn.io</span>
-          <svg class="promo-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-        </a>
+      <div id="ssl-details" class="ssl-details" hidden>
+        <div><span data-i18n="sslIssuer">Issuer</span><strong id="ssl-issuer">--</strong></div>
+        <div><span data-i18n="sslValidTo">Valid to</span><strong id="ssl-valid-to">--</strong></div>
+        <div><span data-i18n="sslHost">Host</span><strong id="ssl-host">--</strong></div>
       </div>
     </div>
   </div>
