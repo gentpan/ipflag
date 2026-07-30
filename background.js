@@ -322,7 +322,7 @@ function getFallbackFlagCode(hostname) {
 
 async function setFlagIcon(tabId, flagCode) {
   if (!flagCode) {
-    await chrome.action.setIcon({ tabId, path: { '16': 'icons/icon16.png', '48': 'icons/icon48.png' } });
+    await chrome.action.setIcon({ tabId, path: { '16': 'icons/icon16.png', '32': 'icons/icon32.png', '48': 'icons/icon48.png', '128': 'icons/icon128.png' } });
     return;
   }
   const path = `flags/1x1/${flagCode}.png`;
@@ -343,7 +343,7 @@ async function setFlagIcon(tabId, flagCode) {
         ts: Date.now(),
       },
     }).catch(() => {});
-    await chrome.action.setIcon({ tabId, path: { '16': 'icons/icon16.png', '48': 'icons/icon48.png' } });
+    await chrome.action.setIcon({ tabId, path: { '16': 'icons/icon16.png', '32': 'icons/icon32.png', '48': 'icons/icon48.png', '128': 'icons/icon128.png' } });
   }
 }
 
@@ -400,7 +400,7 @@ function isCurrentNavigation(tabId, url, generation) {
 
 async function resetTabAction(tabId) {
   await Promise.all([
-    chrome.action.setIcon({ tabId, path: { '16': 'icons/icon16.png', '48': 'icons/icon48.png' } }),
+    chrome.action.setIcon({ tabId, path: { '16': 'icons/icon16.png', '32': 'icons/icon32.png', '48': 'icons/icon48.png', '128': 'icons/icon128.png' } }),
     chrome.action.setTitle({ tabId, title: t('title') }),
   ]);
 }
