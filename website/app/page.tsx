@@ -234,6 +234,9 @@ export default function Home() {
           <img src="/flag-de.svg" alt="" />
           <img src="/flag-us.svg" alt="" />
           <img src="/flag-jp.svg" alt="" />
+          <img src="/flag-cn.svg" alt="" />
+          <img src="/flag-sg.svg" alt="" />
+          <img src="/flag-hk.svg" alt="" />
         </div>
         <div className="shell final-content">
           <p className="eyebrow light"><span /> Coming to Chrome</p>

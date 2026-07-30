@@ -546,6 +546,9 @@ img {
 .final-flags img:nth-child(1) { left: 8%; top: 17%; transform: rotate(-10deg); }
 .final-flags img:nth-child(2) { right: 7%; top: 20%; transform: rotate(8deg); }
 .final-flags img:nth-child(3) { left: 17%; bottom: 14%; transform: rotate(5deg); }
+.final-flags img:nth-child(4) { right: 17%; bottom: 14%; transform: rotate(-6deg); }
+.final-flags img:nth-child(5) { left: 31%; top: 9%; transform: rotate(6deg); }
+.final-flags img:nth-child(6) { right: 30%; top: 10%; transform: rotate(-8deg); }
 
 .site-footer { min-height: 110px; display: grid; grid-template-columns: 1fr 1fr 1fr; align-items: center; font-size: 12px; }
 .site-footer > p { text-align: center; color: var(--muted); }
@@ -597,6 +600,9 @@ img {
   .final-flags img:nth-child(1) { left: 3%; top: 9%; }
   .final-flags img:nth-child(2) { right: 3%; top: 12%; }
   .final-flags img:nth-child(3) { left: 8%; bottom: 8%; }
+  .final-flags img:nth-child(4) { right: 8%; bottom: 8%; }
+  .final-flags img:nth-child(5) { left: 24%; top: 4%; }
+  .final-flags img:nth-child(6) { right: 24%; top: 5%; }
   .site-footer { grid-template-columns: 1fr; gap: 16px; padding-top: 32px; padding-bottom: 32px; text-align: center; }
   .site-footer .brand, .site-footer > div { justify-self: center; }
   .site-footer > p { margin: 0; }
