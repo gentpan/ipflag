@@ -11,6 +11,7 @@ website/.wrangler/
 website/.vinext/
 api/node_modules/
 api/data/
+api-go/ipflag-api
 website/.env*
 
 # Local editor and OS files

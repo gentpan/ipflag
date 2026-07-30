@@ -1,4 +1,7 @@
-# IP Flag Geo API
+# IP Flag Geo API (legacy reference)
+
+The production service is now the statically compiled Go implementation in
+[`../api-go/`](../api-go/). This directory is retained as a reference adapter.
 
 The service exposes the extension-compatible normalized response shape:
 
@@ -7,10 +10,8 @@ The service exposes the extension-compatible normalized response shape:
 - `GET /health`
 
 DB-IP Lite city and ASN MMDB files are loaded from `data/dbip-city-lite.mmdb`
-and `data/dbip-asn-lite.mmdb`. They are monthly, CC BY 4.0 databases and must
-be attributed in web pages that use their results. If an IP2Location BIN is
-available, set `IP2LOCATION_DB_PATH`; it is queried first and DB-IP fills
-missing fields.
+and `data/dbip-asn-lite.mmdb`. The production Go API also adds SSL certificate
+dates to domain responses and omits provider/source labels from public output.
 
 Environment variables:
 

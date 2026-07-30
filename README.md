@@ -47,12 +47,11 @@ Example response:
   "asn": "AS15169",
   "isp": "Google LLC",
   "latitude": 37.422,
-  "longitude": -122.085,
-  "source": "db-ip-lite"
+  "longitude": -122.085
 }
 ```
 
-The API service is implemented in [`api/`](api/). It supports local IP2Location BIN data when configured and uses the monthly DB-IP Lite City and ASN databases as additional sources. DB-IP Lite is licensed under CC BY 4.0 and the website includes the required attribution link.
+Domain responses also include an `ssl` object with the certificate check time, validity period, expiry time, remaining days and certificate subject/issuer. The production API is a statically compiled Go service in [`api-go/`](api-go/), with monthly DB-IP Lite City and ASN database updates managed by systemd. The older [`api/`](api/) directory is retained as a reference implementation.
 
 ## Load the extension locally
 
@@ -84,7 +83,8 @@ npm run lint
 background.js       Chrome service worker and toolbar flag updates
 popup.html/js/css   Extension popup UI
 flags/              Country flag assets
-api/                IP Flag domain/IP geolocation API
+api-go/             Production Go geolocation API and deployment files
+api/                Legacy/reference API implementation
 website/            Multilingual product landing page
 manifest.json       Chrome Extension Manifest V3
 ```
