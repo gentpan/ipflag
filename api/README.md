@@ -6,10 +6,11 @@ The service exposes the extension-compatible normalized response shape:
 - `GET /ip/8.8.8.8`
 - `GET /health`
 
-DB-IP Lite city MMDB is loaded from `data/dbip-city-lite.mmdb`. It is a
-monthly, CC BY 4.0 database and must be attributed in web pages that use its
-results. If an IP2Location BIN is available, set `IP2LOCATION_DB_PATH`; it is
-queried first and DB-IP fills missing fields.
+DB-IP Lite city and ASN MMDB files are loaded from `data/dbip-city-lite.mmdb`
+and `data/dbip-asn-lite.mmdb`. They are monthly, CC BY 4.0 databases and must
+be attributed in web pages that use their results. If an IP2Location BIN is
+available, set `IP2LOCATION_DB_PATH`; it is queried first and DB-IP fills
+missing fields.
 
 Environment variables:
 

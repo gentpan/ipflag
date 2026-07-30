@@ -16,8 +16,10 @@ const cache = new Map();
 const rate = new Map();
 
 const dbIpPath = process.env.DBIP_MMDB_PATH || path.join(root, "data", "dbip-city-lite.mmdb");
+const dbIpAsnPath = process.env.DBIP_ASN_MMDB_PATH || path.join(root, "data", "dbip-asn-lite.mmdb");
 const ip2LocationPath = process.env.IP2LOCATION_DB_PATH || path.join(root, "data", "IP2LOCATION.BIN");
 let dbIpLookup;
+let dbIpAsnLookup;
 let ip2Location;
 
 const countryNames = {
@@ -46,6 +48,12 @@ async function loadSources() {
     log(`DB-IP source loaded: ${dbIpPath}`);
   } catch (error) {
     log(`DB-IP source unavailable at ${dbIpPath}: ${error.message}`);
+  }
+  try {
+    dbIpAsnLookup = await maxmind.open(dbIpAsnPath);
+    log(`DB-IP ASN source loaded: ${dbIpAsnPath}`);
+  } catch (error) {
+    log(`DB-IP ASN source unavailable at ${dbIpAsnPath}: ${error.message}`);
   }
 
   if (process.env.IP2LOCATION_DB_PATH) {
@@ -97,6 +105,17 @@ function fromDbIp(ip) {
   };
 }
 
+function fromDbIpAsn(ip) {
+  const record = dbIpAsnLookup?.get(ip);
+  if (!record) return null;
+  return {
+    ip,
+    asn: record.autonomous_system_number ? `AS${record.autonomous_system_number}` : "",
+    isp: asText(record.autonomous_system_organization),
+    source: "db-ip-lite-asn",
+  };
+}
+
 function fromIp2Location(ip) {
   if (!ip2Location) return null;
   const result = ip2Location.getAll(ip);
@@ -133,7 +152,7 @@ function merge(primary, secondary) {
 async function lookupIp(ip) {
   const cached = cache.get(ip);
   if (cached && cached.expires > Date.now()) return cached.value;
-  const result = merge(fromIp2Location(ip), fromDbIp(ip));
+  const result = merge(fromIp2Location(ip), merge(fromDbIp(ip), fromDbIpAsn(ip)));
   if (!result) return null;
   result.ip = ip;
   result.country_code = asText(result.country_code).toUpperCase();
@@ -185,7 +204,7 @@ async function handle(request, response) {
   if (request.method !== "GET") return sendJson(response, 405, { error: "method_not_allowed" });
   if (!rateLimit(request)) return sendJson(response, 429, { error: "rate_limited", message: "Too many requests. Try again shortly." }, { "Retry-After": "60" });
   if (url.pathname === "/" || url.pathname === "/health") {
-    return sendJson(response, 200, { ok: true, service: "IP Flag Geo API", sources: { ip2location: Boolean(ip2Location), db_ip: Boolean(dbIpLookup) } });
+    return sendJson(response, 200, { ok: true, service: "IP Flag Geo API", sources: { ip2location: Boolean(ip2Location), db_ip: Boolean(dbIpLookup), db_ip_asn: Boolean(dbIpAsnLookup) } });
   }
 
   const parts = url.pathname.split("/").filter(Boolean);
