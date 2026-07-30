@@ -4,6 +4,7 @@ import Link from "next/link";
 export const metadata: Metadata = {
   title: "Privacy Policy — IP Flag",
   description: "How IP Flag handles website hostnames and server location data.",
+  alternates: { canonical: "https://ipflag.io/privacy" },
 };
 
 const sections = [
