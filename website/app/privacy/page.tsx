@@ -13,7 +13,7 @@ const sections = [
   },
   {
     title: "Data processed",
-        body: "To provide this feature, IP Flag sends the current website hostname to the IP Flag geolocation API. The response can include the resolved server IP, country, region, city, ASN, ISP, timezone and approximate coordinates. This describes the website server, not your physical location.",
+    body: "To provide this feature, IP Flag sends the current website hostname to https://api.ipflag.io. The response can include the resolved server IP, country, region, city, ASN, ISP, timezone and approximate coordinates. This describes the website server, not your physical location.",
   },
   {
     title: "Local caching",
@@ -25,7 +25,7 @@ const sections = [
   },
   {
     title: "Third-party services",
-        body: "IP Flag uses its own geolocation API, backed by local IP databases including IP2Location and DB-IP Lite, and a map image service to display the approximate server location. DB-IP attribution is provided on this site. Opening optional external links is always initiated by the user.",
+    body: "IP Flag uses its own geolocation API, backed by local DB-IP Lite City and ASN databases, and an optional map image service to display the approximate server location. DB-IP attribution is provided on this site. Opening optional external links is always initiated by the user.",
   },
   {
     title: "Changes",
@@ -47,7 +47,7 @@ export default function PrivacyPage() {
         <div className="legal-title">
           <p className="eyebrow"><span /> Legal</p>
           <h1>Privacy policy</h1>
-          <p>Effective July 30, 2026</p>
+          <p>Effective July 31, 2026</p>
         </div>
         <div className="legal-sections">
           {sections.map((section, index) => (
