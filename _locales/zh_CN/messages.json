@@ -1,0 +1,8 @@
+{
+  "extensionName": {
+    "message": "IP Flag - 网站服务器国旗与 IP 信息"
+  },
+  "extensionDescription": {
+    "message": "一眼查看网站服务器所在国家，并查看 IP、ASN、ISP、城市和时区信息。"
+  }
+}

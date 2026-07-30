@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <div class="brand-bar">
+      <span class="brand-mark">IP</span>
+      <div>
+        <strong>IP Flag</strong>
+        <span>一眼查看网站服务器所在国家</span>
+      </div>
+    </div>
+    <div id="loading" class="loading">
+      <div class="spinner"></div>
+    </div>
+
+    <div id="error" class="state-msg" style="display:none">
+      <span id="error-msg"></span>
+    </div>
+
+    <div id="content" style="display:none">
+      <div class="header">
+        <img id="flag-img" class="flag" alt="">
+        <div class="header-info">
+          <div id="country" class="country-name"></div>
+          <div id="city-region" class="city-text"></div>
+        </div>
+        <div id="country-code" class="country-code"></div>
+      </div>
+
+      <div id="map-container" class="map-wrap" style="display:none">
+        <div id="map-loading" class="map-loading">
+          <div class="spinner"></div>
+        </div>
+        <img id="map-img" class="map" alt="" style="display:none">
+      </div>
+
+      <div class="info-list">
+        <div class="icon-col">
+          <span class="icon-cell"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10A15.3 15.3 0 0 1 12 2"/></svg></span>
+          <span class="icon-cell"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+          <span class="icon-cell"><svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
+          <span class="icon-cell"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>
+          <span class="icon-cell"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+          <span class="icon-cell"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span>
+        </div>
+        <div class="label-col">
+          <span class="label-cell">IP</span>
+          <span class="label-cell">域名</span>
+          <span class="label-cell">ASN</span>
+          <span class="label-cell">ISP</span>
+          <span class="label-cell">时区</span>
+          <span class="label-cell">坐标</span>
+        </div>
+        <div class="val-col">
+          <span id="ip" class="value"></span>
+          <span id="domain" class="value domain"></span>
+          <span id="asn" class="value"></span>
+          <span id="isp" class="value"></span>
+          <span id="timezone" class="value"></span>
+          <span id="coords" class="value"></span>
+        </div>
+      </div>
+      <!-- 底部推广 -->
+      <div class="promo-group">
+        <a id="promo-link" class="promo" href="#" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          <span class="promo-text">检测 IP 纯净度</span>
+          <span class="promo-badge">CleanIP.io</span>
+          <svg class="promo-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
+        <a class="promo" href="https://flagcdn.io" target="_blank">
+          <svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+          <span class="promo-text">国旗图标来源</span>
+          <span class="promo-badge">Flagcdn.io</span>
+          <svg class="promo-arrow" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>

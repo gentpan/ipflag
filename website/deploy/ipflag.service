@@ -1,0 +1,21 @@
+[Unit]
+Description=IP Flag product website
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/ipflag.io/current
+Environment=NODE_ENV=production
+Environment=PORT=4317
+Environment=HOST=127.0.0.1
+Environment=VINEXT_TRUSTED_HOSTS=ipflag.io
+ExecStart=/usr/bin/node /opt/ipflag.io/current/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

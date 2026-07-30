@@ -1,0 +1,17 @@
+.DS_Store
+
+# Local extension release archive
+IP-Flag-*.zip
+
+# Website build and local runtime output
+website/node_modules/
+website/dist/
+website/outputs/
+website/.wrangler/
+website/.vinext/
+website/.env*
+
+# Local editor and OS files
+.vscode/
+.idea/
+*.log
