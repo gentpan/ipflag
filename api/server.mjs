@@ -189,28 +189,30 @@ async function handle(request, response) {
   }
 
   const parts = url.pathname.split("/").filter(Boolean);
-  if (parts.length !== 2 || !["ip", "domain"].includes(parts[0])) {
+  const endpoint = parts[0];
+  const value = parts.length > 1 ? parts.slice(1).join("/") : url.searchParams.get(endpoint);
+  if (!value || parts.length > 2 || !["ip", "domain"].includes(endpoint)) {
     return sendJson(response, 404, { error: "not_found", endpoints: ["/ip/:ip", "/domain/:domain"] });
   }
 
   let ip;
   let query;
   try {
-    if (parts[0] === "ip") {
-      ip = normalizeIp(parts[1]);
+    if (endpoint === "ip") {
+      ip = normalizeIp(value);
       query = ip;
       if (!ip) return sendJson(response, 400, { error: "invalid_ip" });
     } else {
-      query = cleanDomain(parts[1]);
+      query = cleanDomain(value);
       if (!query) return sendJson(response, 400, { error: "invalid_domain" });
       ip = await resolveDomain(query);
       if (!ip) return sendJson(response, 404, { error: "domain_not_resolved", domain: query });
     }
     const result = await lookupIp(ip);
     if (!result) return sendJson(response, 404, { error: "ip_not_found", ip, query });
-    return sendJson(response, 200, { ...result, query, query_type: parts[0] });
+    return sendJson(response, 200, { ...result, query, query_type: endpoint });
   } catch (error) {
-    log(`${parts[0]} lookup failed for ${parts[1]}: ${error.message}`);
+    log(`${endpoint} lookup failed for ${value}: ${error.message}`);
     return sendJson(response, 502, { error: "lookup_failed", message: "The lookup service could not resolve this request." });
   }
 }
