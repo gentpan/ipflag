@@ -28,9 +28,9 @@ export async function generateMetadata(): Promise<Metadata> {
     description:
       "See where every website is hosted, with its country, IP, network and server location.",
     icons: {
-      icon: "/ipflag-icon.png",
-      shortcut: "/ipflag-icon.png",
-      apple: "/ipflag-icon.png",
+      icon: "/favicon.svg",
+      shortcut: "/favicon-32.png",
+      apple: "/ipflag-icon.svg",
     },
     openGraph: {
       title: "IP Flag — See where every website is hosted",
