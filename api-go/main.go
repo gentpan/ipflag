@@ -59,12 +59,13 @@ type asnRecord struct {
 }
 
 type geoService struct {
-	city     *maxminddb.Reader
-	asn      *maxminddb.Reader
-	geoMu    sync.Mutex
-	geo      map[string]cacheEntry
-	sslMu    sync.Mutex
-	sslCache map[string]sslCacheEntry
+	city        *maxminddb.Reader
+	asn         *maxminddb.Reader
+	maxmindCity *maxminddb.Reader
+	geoMu       sync.Mutex
+	geo         map[string]cacheEntry
+	sslMu       sync.Mutex
+	sslCache    map[string]sslCacheEntry
 }
 
 type cacheEntry struct {
@@ -85,18 +86,24 @@ func env(name, fallback string) string {
 }
 
 func openService() (*geoService, error) {
-	cityPath := env("MAXMIND_CITY_MMDB_PATH", "/opt/ipflag-api/current/data/GeoLite2-City.mmdb")
-	asnPath := env("MAXMIND_ASN_MMDB_PATH", "/opt/ipflag-api/current/data/GeoLite2-ASN.mmdb")
-	city, err := maxminddb.Open(cityPath)
+	dbipCityPath := env("DBIP_MMDB_PATH", "/opt/ipflag-api/current/data/dbip-city-lite.mmdb")
+	dbipASNPath := env("DBIP_ASN_MMDB_PATH", "/opt/ipflag-api/current/data/dbip-asn-lite.mmdb")
+	maxmindCityPath := env("MAXMIND_CITY_MMDB_PATH", "/opt/ipflag-api/current/data/GeoLite2-City.mmdb")
+	dbipCity, err := maxminddb.Open(dbipCityPath)
 	if err != nil {
-		return nil, fmt.Errorf("open MaxMind GeoLite2 City database: %w", err)
+		return nil, fmt.Errorf("open DB-IP City database: %w", err)
 	}
-	asn, err := maxminddb.Open(asnPath)
+	dbipASN, err := maxminddb.Open(dbipASNPath)
 	if err != nil {
-		city.Close()
-		return nil, fmt.Errorf("open MaxMind GeoLite2 ASN database: %w", err)
+		dbipCity.Close()
+		return nil, fmt.Errorf("open DB-IP ASN database: %w", err)
 	}
-	return &geoService{city: city, asn: asn, geo: make(map[string]cacheEntry), sslCache: make(map[string]sslCacheEntry)}, nil
+	maxmindCity, err := maxminddb.Open(maxmindCityPath)
+	if err != nil {
+		log.Printf("MaxMind GeoLite2 supplement unavailable: %v", err)
+		maxmindCity = nil
+	}
+	return &geoService{city: dbipCity, asn: dbipASN, maxmindCity: maxmindCity, geo: make(map[string]cacheEntry), sslCache: make(map[string]sslCacheEntry)}, nil
 }
 
 func text(values map[string]string, key string) string {
@@ -120,22 +127,43 @@ func (service *geoService) lookup(ip net.IP) (map[string]any, error) {
 	if err := service.city.Lookup(ip, &city); err != nil {
 		return nil, err
 	}
+	var supplement cityRecord
+	if service.maxmindCity != nil {
+		_ = service.maxmindCity.Lookup(ip, &supplement)
+	}
 	var asn asnRecord
 	if err := service.asn.Lookup(ip, &asn); err != nil {
 		return nil, err
 	}
 	code := strings.ToUpper(city.Country.ISOCode)
 	if code == "" {
-		return nil, errors.New("IP not found in MaxMind GeoLite2")
+		city = supplement
+		code = strings.ToUpper(city.Country.ISOCode)
+	}
+	if code == "" {
+		return nil, errors.New("IP not found in DB-IP or MaxMind GeoLite2")
 	}
 	value := map[string]any{
 		"ip":           key,
 		"continent":    city.Continent.Code,
 		"country_code": code,
 		"country":      text(city.Country.Names, "en"),
-		"timezone":     city.Location.TimeZone,
 		"latitude":     city.Location.Latitude,
 		"longitude":    city.Location.Longitude,
+	}
+	timezone := city.Location.TimeZone
+	if timezone == "" {
+		timezone = supplement.Location.TimeZone
+	}
+	if timezone != "" {
+		value["timezone"] = timezone
+	}
+	if city.Postal.Code == "" && supplement.Postal.Code != "" {
+		value["postal_code"] = supplement.Postal.Code
+	}
+	if city.Location.Latitude == 0 && city.Location.Longitude == 0 {
+		value["latitude"] = supplement.Location.Latitude
+		value["longitude"] = supplement.Location.Longitude
 	}
 	if city.Postal.Code != "" {
 		value["postal_code"] = city.Postal.Code
@@ -340,6 +368,9 @@ func main() {
 	}
 	defer service.city.Close()
 	defer service.asn.Close()
+	if service.maxmindCity != nil {
+		defer service.maxmindCity.Close()
+	}
 	limit, _ := strconv.Atoi(env("RATE_LIMIT", strconv.Itoa(defaultRateLimit)))
 	if limit < 1 {
 		limit = defaultRateLimit

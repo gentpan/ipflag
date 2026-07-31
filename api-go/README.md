@@ -1,15 +1,17 @@
 # IP Flag Go API
 
 Go implementation of the IP Flag geolocation API. It serves `/domain/:domain`
-and `/ip/:ip` (query parameters are also accepted), reads MaxMind GeoLite2 City
-and ASN databases, and adds an SSL certificate summary to domain lookups.
+and `/ip/:ip` (query parameters are also accepted), reads DB-IP Lite as the
+primary geolocation source, supplements missing timezone/coordinates from
+MaxMind GeoLite2 City, and adds an SSL certificate summary to domain lookups.
 
 The service intentionally does not expose a provider/source field in its
-public response. The GeoLite2 databases are downloaded by the protected
-`deploy/update-maxmind.sh` timer using `/etc/ipflag-api/maxmind.env`; the
-database files are never exposed to the browser extension.
+public response. DB-IP Lite and MaxMind GeoLite2 databases are downloaded by
+separate protected timers. MaxMind credentials are read from
+`/etc/ipflag-api/maxmind.env`; database files are never exposed to the browser
+extension.
 
-The update timer requires a MaxMind account ID and license key in that root-
-owned file. Install `ipflag-maxmind-update.service` and
-`ipflag-maxmind-update.timer` alongside the API service; the old DB-IP update
-unit should remain disabled.
+The MaxMind update timer requires an account ID and license key in that
+root-owned file. Install both `ipflag-dbip-update.service`/
+`ipflag-dbip-update.timer` and `ipflag-maxmind-update.service`/
+`ipflag-maxmind-update.timer` alongside the API service.

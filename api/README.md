@@ -9,9 +9,10 @@ The service exposes the extension-compatible normalized response shape:
 - `GET /ip/8.8.8.8`
 - `GET /health`
 
-This legacy Node adapter is not deployed. The production Go API uses MaxMind
-GeoLite2 City and ASN MMDB files and adds SSL certificate dates to domain
-responses while omitting provider/source labels from public output.
+This legacy Node adapter is not deployed. The production Go API uses DB-IP
+Lite as the primary source and MaxMind GeoLite2 as a supplemental source, and
+adds SSL certificate dates to domain responses while omitting provider/source
+labels from public output.
 
 Environment variables:
 
