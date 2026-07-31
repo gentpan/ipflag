@@ -39,7 +39,7 @@ export default function PrivacyPage() {
     <main className="legal-page">
       <header className="legal-header shell">
         <Link className="brand" href="/" aria-label="Back to IP Flag home">
-          <img className="flag-mark" src="/favicon.svg" alt="" aria-hidden="true" />
+          <img className="flag-mark" src="/ipflag-icon.svg" alt="" aria-hidden="true" />
           <span>IP FLAG</span>
         </Link>
         <Link className="legal-back" href="/">← Back to home</Link>

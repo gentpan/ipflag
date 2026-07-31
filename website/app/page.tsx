@@ -7,7 +7,7 @@ import { getTranslation, languages, type Language } from "./translations";
 const CHROME_STORE_URL = "https://chromewebstore.google.com/detail/ipgeo-flag/aaclbfgifnkbhkokgajglhgphjjjcoaa";
 
 function FlagMark() {
-  return <img className="flag-mark" src="/favicon.svg" alt="" aria-hidden="true" />;
+  return <img className="flag-mark" src="/ipflag-icon.svg" alt="" aria-hidden="true" />;
 }
 
 function LanguageSwitcher({ language, onChange }: { language: Language; onChange: (value: Language) => void }) {

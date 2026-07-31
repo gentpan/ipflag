@@ -7,6 +7,8 @@
   --white: #ffffff;
   --blue: #2857ff;
   --blue-dark: #1839b8;
+  --brand-green: #3d9f5c;
+  --brand-deep: #173b4a;
   --red: #ff4b47;
   --line: #dcded7;
   --night: #111725;
@@ -56,10 +58,15 @@ img {
   align-items: center;
   gap: 11px;
   width: fit-content;
+  color: var(--brand-deep);
   font-family: var(--font-geist-mono), monospace;
   font-size: 15px;
   font-weight: 750;
   letter-spacing: .08em;
+}
+
+.brand:hover {
+  color: var(--brand-green);
 }
 
 .flag-mark {
@@ -67,6 +74,7 @@ img {
   height: 31px;
   display: block;
   object-fit: contain;
+  border-radius: 50%;
 }
 
 .site-header nav {
