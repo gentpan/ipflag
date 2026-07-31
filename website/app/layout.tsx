@@ -60,9 +60,9 @@ export function generateMetadata(): Metadata {
       },
     },
     icons: {
-      icon: "/favicon.svg",
-      shortcut: "/favicon-32.png",
-      apple: "/ipflag-icon.svg",
+      icon: "/favicon-v2.svg",
+      shortcut: "/favicon-v2.svg",
+      apple: "/favicon-v2.svg",
     },
     openGraph: {
       title: "IP Flag — See where every website is hosted",
