@@ -69,7 +69,7 @@ Example response:
 }
 ```
 
-Domain responses also include SSL check time, certificate validity, expiry time, remaining days, subject and issuer. The public response intentionally omits a provider/source field. DB-IP Lite City and ASN databases are updated by the deployment timer; see [`api-go/README.md`](api-go/README.md).
+Domain responses also include SSL check time, certificate validity, expiry time, remaining days, subject and issuer. The public response intentionally omits a provider/source field. MaxMind GeoLite2 City and ASN databases are updated by the deployment timer; see [`api-go/README.md`](api-go/README.md).
 
 ## Install locally
 

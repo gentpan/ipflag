@@ -9,9 +9,9 @@ The service exposes the extension-compatible normalized response shape:
 - `GET /ip/8.8.8.8`
 - `GET /health`
 
-DB-IP Lite city and ASN MMDB files are loaded from `data/dbip-city-lite.mmdb`
-and `data/dbip-asn-lite.mmdb`. The production Go API also adds SSL certificate
-dates to domain responses and omits provider/source labels from public output.
+This legacy Node adapter is not deployed. The production Go API uses MaxMind
+GeoLite2 City and ASN MMDB files and adds SSL certificate dates to domain
+responses while omitting provider/source labels from public output.
 
 Environment variables:
 

@@ -10,8 +10,8 @@ Group=www-data
 WorkingDirectory=/opt/ipflag-api/current
 Environment=PORT=4320
 Environment=HOST=127.0.0.1
-Environment=DBIP_MMDB_PATH=/opt/ipflag-api/current/data/dbip-city-lite.mmdb
-Environment=DBIP_ASN_MMDB_PATH=/opt/ipflag-api/current/data/dbip-asn-lite.mmdb
+Environment=MAXMIND_CITY_MMDB_PATH=/opt/ipflag-api/current/data/GeoLite2-City.mmdb
+Environment=MAXMIND_ASN_MMDB_PATH=/opt/ipflag-api/current/data/GeoLite2-ASN.mmdb
 Environment=RATE_LIMIT=120
 ExecStart=/opt/ipflag-api/current/ipflag-api
 Restart=on-failure

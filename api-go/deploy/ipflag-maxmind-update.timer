@@ -1,0 +1,9 @@
+[Unit]
+Description=Monthly MaxMind GeoLite2 update for IP Flag
+
+[Timer]
+OnCalendar=*-*-04 04:20:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

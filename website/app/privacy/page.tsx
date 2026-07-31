@@ -26,7 +26,7 @@ const sections = [
   },
   {
     title: "Third-party services",
-    body: "IP Flag uses its own geolocation API, backed by local DB-IP Lite City and ASN databases, and an optional map image service to display the approximate server location. DB-IP attribution is provided on this site. Opening optional external links is always initiated by the user.",
+    body: "IP Flag uses its own geolocation API, backed by local MaxMind GeoLite2 City and ASN databases, and an optional map image service to display the approximate server location. MaxMind attribution is provided on this site. Opening optional external links is always initiated by the user.",
   },
   {
     title: "Changes",
@@ -64,7 +64,7 @@ export default function PrivacyPage() {
       </article>
       <footer className="legal-footer shell">
         <span>© 2026 IP Flag</span>
-        <a href="https://db-ip.com" target="_blank" rel="noreferrer">IP Geolocation by DB-IP</a>
+        <a href="https://www.maxmind.com/en/geolite2" target="_blank" rel="noreferrer">IP Geolocation by MaxMind GeoLite2</a>
         <a href="https://ipflag.io">ipflag.io</a>
       </footer>
     </main>

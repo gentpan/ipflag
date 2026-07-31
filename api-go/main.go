@@ -43,9 +43,13 @@ type cityRecord struct {
 	} `maxminddb:"country"`
 	Subdivisions []names `maxminddb:"subdivisions"`
 	City         names   `maxminddb:"city"`
-	Location     struct {
+	Postal       struct {
+		Code string `maxminddb:"code"`
+	} `maxminddb:"postal"`
+	Location struct {
 		Latitude  float64 `maxminddb:"latitude"`
 		Longitude float64 `maxminddb:"longitude"`
+		TimeZone  string  `maxminddb:"time_zone"`
 	} `maxminddb:"location"`
 }
 
@@ -81,16 +85,16 @@ func env(name, fallback string) string {
 }
 
 func openService() (*geoService, error) {
-	cityPath := env("DBIP_MMDB_PATH", "/opt/ipflag-api/current/data/dbip-city-lite.mmdb")
-	asnPath := env("DBIP_ASN_MMDB_PATH", "/opt/ipflag-api/current/data/dbip-asn-lite.mmdb")
+	cityPath := env("MAXMIND_CITY_MMDB_PATH", "/opt/ipflag-api/current/data/GeoLite2-City.mmdb")
+	asnPath := env("MAXMIND_ASN_MMDB_PATH", "/opt/ipflag-api/current/data/GeoLite2-ASN.mmdb")
 	city, err := maxminddb.Open(cityPath)
 	if err != nil {
-		return nil, fmt.Errorf("open DB-IP city database: %w", err)
+		return nil, fmt.Errorf("open MaxMind GeoLite2 City database: %w", err)
 	}
 	asn, err := maxminddb.Open(asnPath)
 	if err != nil {
 		city.Close()
-		return nil, fmt.Errorf("open DB-IP ASN database: %w", err)
+		return nil, fmt.Errorf("open MaxMind GeoLite2 ASN database: %w", err)
 	}
 	return &geoService{city: city, asn: asn, geo: make(map[string]cacheEntry), sslCache: make(map[string]sslCacheEntry)}, nil
 }
@@ -122,15 +126,19 @@ func (service *geoService) lookup(ip net.IP) (map[string]any, error) {
 	}
 	code := strings.ToUpper(city.Country.ISOCode)
 	if code == "" {
-		return nil, errors.New("IP not found in DB-IP")
+		return nil, errors.New("IP not found in MaxMind GeoLite2")
 	}
 	value := map[string]any{
 		"ip":           key,
 		"continent":    city.Continent.Code,
 		"country_code": code,
 		"country":      text(city.Country.Names, "en"),
+		"timezone":     city.Location.TimeZone,
 		"latitude":     city.Location.Latitude,
 		"longitude":    city.Location.Longitude,
+	}
+	if city.Postal.Code != "" {
+		value["postal_code"] = city.Postal.Code
 	}
 	if len(city.Subdivisions) > 0 {
 		value["region"] = text(city.Subdivisions[0].Names, "en")
