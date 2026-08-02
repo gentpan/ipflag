@@ -1,6 +1,0 @@
-[Unit]
-Description=Update DB-IP Lite database for IP Flag
-
-[Service]
-Type=oneshot
-ExecStart=/opt/ipflag-api/current/deploy/update-dbip.sh
