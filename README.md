@@ -62,14 +62,26 @@ Example response:
   "country": "United States",
   "region": "California",
   "city": "Mountain View",
+  "timezone": "America/Los_Angeles",
+  "postal_code": "95196",
+  "accuracy": "HIGH",
   "asn": "AS15169",
   "isp": "Google LLC",
   "latitude": 37.422,
-  "longitude": -122.085
+  "longitude": -122.085,
+  "is_datacenter": true,
+  "datacenter": "Google LLC",
+  "is_vpn": false,
+  "is_proxy": false,
+  "is_tor": false,
+  "is_abuser": false,
+  "abuser_score": "0.0016 (Low)"
 }
 ```
 
-Domain responses also include SSL check time, certificate validity, expiry time, remaining days, subject and issuer. The public response intentionally omits a provider/source field. DB-IP Lite remains the primary source, with MaxMind GeoLite2 used to supplement timezone and coordinates; both databases are updated by deployment timers. See [`api-go/README.md`](api-go/README.md).
+Domain responses also include SSL check time, certificate validity, expiry time, remaining days, subject and issuer. The public response intentionally omits a provider/source field.
+
+[ipapi.is](https://ipapi.is) is the primary geolocation source; the local DB-IP Lite databases stay installed as the fallback for when the upstream is unreachable or out of quota. Successful lookups are cached for 30 days across restarts. The `is_datacenter`/`is_vpn`/`is_proxy`/`is_tor`/`is_abuser`/`abuser_score`/`accuracy` fields come from ipapi.is only — when they are absent the value is unknown, not false. See [`api-go/README.md`](api-go/README.md).
 
 ## Install locally
 
@@ -114,7 +126,6 @@ popup.html/js/css   Extension popup UI
 flags/              Country flag assets
 icons/              Browser and store icons
 api-go/             Production Go API, deployment and DB update timer
-api/                Legacy/reference API implementation
 website/            Multilingual product website
 store-assets/       Chrome Web Store listing artwork
 manifest.json       Chrome Extension Manifest V3

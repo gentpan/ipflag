@@ -14,11 +14,45 @@ Environment=DBIP_MMDB_PATH=/opt/ipflag-api/current/data/dbip-city-lite.mmdb
 Environment=DBIP_ASN_MMDB_PATH=/opt/ipflag-api/current/data/dbip-asn-lite.mmdb
 Environment=MAXMIND_CITY_MMDB_PATH=/opt/ipflag-api/current/data/GeoLite2-City.mmdb
 Environment=RATE_LIMIT=120
+# Primary geolocation source. The key lives in a root-owned file that is never
+# committed; without it the service falls back to the local databases.
+EnvironmentFile=-/etc/ipflag-api/ipapi.env
+# ipapi.is publishes no quota headers, so the budget is enforced locally.
+# Reaching it degrades to the local databases for the rest of the UTC day.
+Environment=IPAPI_IS_DAILY_LIMIT=20000
+Environment=IPAPI_IS_MAX_INFLIGHT=12
+Environment=IPAPI_IS_TIMEOUT=4s
+Environment=GEO_CACHE_TTL=720h
+Environment=GEO_CACHE_PATH=/var/lib/ipflag-api/geo-cache.jsonl
+Environment=GEO_CACHE_MAX=200000
+Environment=GEO_CACHE_FLUSH=2m
+# Creates and owns /var/lib/ipflag-api so the cache survives restarts.
+StateDirectory=ipflag-api
+StateDirectoryMode=0750
 ExecStart=/opt/ipflag-api/current/ipflag-api
+# systemctl reload drops every cached answer without a restart.
+ExecReload=/bin/kill -HUP $MAINPID
 Restart=on-failure
 RestartSec=3
+# SIGTERM lets the service flush the cache before exiting.
+KillSignal=SIGTERM
+TimeoutStopSec=30
 NoNewPrivileges=true
 PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictNamespaces=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+# The service now needs outbound network for ipapi.is.
+RestrictAddressFamilies=AF_INET AF_INET6
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
+MemoryMax=512M
 
 [Install]
 WantedBy=multi-user.target

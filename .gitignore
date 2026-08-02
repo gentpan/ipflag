@@ -9,10 +9,16 @@ website/dist/
 website/outputs/
 website/.wrangler/
 website/.vinext/
-api/node_modules/
-api/data/
 api-go/ipflag-api
+api-go/api-go
+api-go/data/
 website/.env*
+
+# API credentials and local cache state must never be committed
+api-go/deploy/*.env
+!api-go/deploy/*.env.example
+*.mmdb
+geo-cache.json*
 
 # Local editor and OS files
 .vscode/
