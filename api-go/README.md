@@ -32,54 +32,32 @@ means "unknown", not "false" — the fallback databases cannot provide them.
 
 ## Caching
 
+Lookups are cached in a SQLite table next to the service, so a 30 day TTL
+survives restarts and deploys and the database handles durability, expiry and
+eviction instead of hand-rolled file juggling. A NULL record is a tombstone.
+
 | Outcome | TTL | Why |
 | --- | ---: | --- |
-| ipapi.is answered | `GEO_CACHE_TTL`, 30 days | Answers are stable for weeks and each miss spends quota |
-| Upstream failed, local databases answered | 10 min | Retry the upstream shortly after it recovers instead of shadowing it for a month |
-| Upstream healthy but has no record, local databases answered | 24 h | Asking again changes nothing |
+| ipapi.is answered | `GEO_CACHE_TTL`, 30 days | Answers are stable for weeks, each miss spends quota, and ipapi.is caps caching at 30 days |
+| Upstream failed or out of budget | 10 min | Retry the upstream shortly after it recovers |
+| Upstream healthy but has no record | 24 h | Asking again changes nothing |
 | Neither source can place the address | 24 h | A tombstone; without it every intranet navigation spends a request |
 
-The cache lives in memory and is mirrored to an append-only log, so a 30 day
-TTL survives restarts and deploys. Appending costs one line per new entry
-rather than rewriting the whole file, which matters at a six-figure entry
-count. A single goroutine owns every write; buffered lines are flushed and
-`fsync`ed every `GEO_CACHE_FLUSH` and once more on `SIGTERM`, and the log is
-compacted to the live entries once superseded lines dominate it. Disk errors
-are never fatal — the cache degrades to memory-only.
-
-Entries are stored as a compact struct rather than a rendered response map;
-100,000 entries measure about 80 MB resident. Past `GEO_CACHE_MAX` the entries
-closest to expiry are dropped, a tenth of the cap at a time.
-
-The first line of the log records a schema number. Changing the shape of a
-cached record means bumping `cacheSchema` in `main.go`, which makes every
-stored entry expire on the next start — otherwise month-old entries would pin
-the old behaviour. To drop the cache without a restart:
-
-```sh
-systemctl reload ipflag-api
-```
+Expired rows, and the oldest rows past `GEO_CACHE_MAX`, are pruned hourly. To
+drop everything, stop the service, delete the database file and start again.
 
 ## Quota and failure handling
 
-ipapi.is returns no rate-limit headers of any kind, so the budget is counted
-locally. `IPAPI_IS_DAILY_LIMIT` requests per UTC day are allowed; past that the
-service serves from the local databases until midnight and logs the day's
-usage. Usage is also logged every 500 calls.
+ipapi.is returns no rate-limit headers, so the budget is counted locally.
+`IPAPI_IS_DAILY_LIMIT` requests per UTC day are allowed; past that the service
+serves from the local databases until midnight. Usage is logged every 500 calls.
 
-- Concurrent lookups of the same IP collapse into one upstream call, so a burst
-  of tabs opening the same site spends one request, not many.
+- Concurrent lookups of the same IP collapse into one upstream call.
 - Private, loopback, link-local and CGNAT addresses never reach ipapi.is: they
   are in no geo database, and sending them would disclose internal addressing.
-- At most `IPAPI_IS_MAX_INFLIGHT` upstream requests run at once.
-- After five consecutive failures the breaker opens for a minute. When it
-  expires exactly one request is let through as a probe; the rest keep using
-  the local databases until that probe reports back.
-- Reaching the daily budget and "no record for this IP" both leave the breaker
-  closed — neither says anything about the upstream's health.
+- After five consecutive failures the upstream is skipped for a minute.
 - Redirects are refused: Go copies the request URL into `Referer` when it
-  follows one, so a redirect would hand the credentials to a third party. The
-  key travels in the POST body, never in the query string.
+  follows one. The key travels in the POST body, never in the query string.
 
 ## Environment variables
 
@@ -92,11 +70,9 @@ usage. Usage is also logged every 500 calls.
 | `IPAPI_IS_URL` | `https://api.ipapi.is` | Upstream base URL |
 | `IPAPI_IS_TIMEOUT` | `4s` | Upstream request timeout |
 | `IPAPI_IS_DAILY_LIMIT` | `20000` | Upstream requests per UTC day; `0` disables the budget |
-| `IPAPI_IS_MAX_INFLIGHT` | `12` | Concurrent upstream requests |
 | `GEO_CACHE_TTL` | `720h` (30 days) | How long successful upstream lookups are cached |
-| `GEO_CACHE_PATH` | `/var/lib/ipflag-api/geo-cache.jsonl` | Cache log location; empty disables persistence |
-| `GEO_CACHE_MAX` | `200000` | Maximum cached IPs before eviction |
-| `GEO_CACHE_FLUSH` | `2m` | How often buffered entries are flushed and synced |
+| `GEO_CACHE_PATH` | `/var/lib/ipflag-api/geo-cache.db` | SQLite cache file |
+| `GEO_CACHE_MAX` | `500000` | Maximum cached IPs before eviction |
 | `DBIP_MMDB_PATH` | `/opt/ipflag-api/current/data/dbip-city-lite.mmdb` | Fallback city database (required) |
 | `DBIP_ASN_MMDB_PATH` | `/opt/ipflag-api/current/data/dbip-asn-lite.mmdb` | Fallback ASN database (required) |
 | `MAXMIND_CITY_MMDB_PATH` | `/opt/ipflag-api/current/data/GeoLite2-City.mmdb` | Optional supplement for the fallback path |
@@ -128,7 +104,7 @@ go build -o ipflag-api .
 ```
 
 ```sh
-IPAPI_IS_KEY=... DBIP_MMDB_PATH=./data/dbip-city-lite.mmdb DBIP_ASN_MMDB_PATH=./data/dbip-asn-lite.mmdb GEO_CACHE_PATH=./geo-cache.json ./ipflag-api
+IPAPI_IS_KEY=... DBIP_MMDB_PATH=./data/dbip-city-lite.mmdb DBIP_ASN_MMDB_PATH=./data/dbip-asn-lite.mmdb GEO_CACHE_PATH=./geo-cache.db ./ipflag-api
 ```
 
 DB-IP Lite is downloadable without an account:
