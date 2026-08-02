@@ -105,7 +105,7 @@ export default function Home() {
 
       <section className="final-cta" id="install"><div className="final-flags" aria-hidden="true"><img src="/flag-de.svg" alt="" /><img src="/flag-us.svg" alt="" /><img src="/flag-jp.svg" alt="" /><img src="/flag-cn.svg" alt="" /><img src="/flag-sg.svg" alt="" /><img src="/flag-hk.svg" alt="" /></div><div className="shell final-content"><p className="eyebrow light"><span /> {t.coming}</p><h2>{t.finalTitle}</h2><p>{t.finalCopy}</p><a className="store-button" href={CHROME_STORE_URL} target="_blank" rel="noreferrer" aria-label={t.comingSoon}><b className="chrome-dot" /><span><small>{t.comingSoon}</small>Chrome Web Store</span></a></div></section>
 
-      <footer className="site-footer shell"><a className="brand" href="#top"><FlagMark /><span>IP FLAG</span></a><p>{t.footerCopy}</p><div><a href="/privacy/">{t.footerPrivacy}</a><a href="https://db-ip.com" target="_blank" rel="noreferrer">DB-IP Lite</a><a href="https://www.maxmind.com/en/geolite2" target="_blank" rel="noreferrer">{t.dbIpAttribution}</a><span>© 2026 IP Flag</span></div></footer>
+      <footer className="site-footer shell"><a className="brand" href="#top"><FlagMark /><span>IP FLAG</span></a><p>{t.footerCopy}</p><div><a href="/privacy/">{t.footerPrivacy}</a><a href="https://db-ip.com" target="_blank" rel="noreferrer">{t.dbIpAttribution}</a><a href="https://www.maxmind.com" target="_blank" rel="noreferrer">{t.maxmindAttribution}</a><span>© 2026 IP Flag</span></div></footer>
     </main>
   );
 }

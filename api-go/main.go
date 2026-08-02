@@ -1088,20 +1088,32 @@ func (limiter *limiter) allow(key string) bool {
 	return entry.count <= limiter.limit
 }
 
-func jsonResponse(writer http.ResponseWriter, status int, value any) {
+// Cache-Control values. max-age governs the browser, s-maxage the CDN, so a
+// long edge TTL does not pin an answer in the user's own disk cache for as
+// long. Note the extension's fetches set no cache option, which means these
+// headers really do reach the browser HTTP cache and outlive its own
+// chrome.storage.session cache.
+const (
+	// An upstream answer is already held for 30 days server-side, so an edge
+	// day adds ~3% staleness while removing almost all repeat origin traffic.
+	cacheIPUpstream = "public, max-age=3600, s-maxage=86400, stale-if-error=604800"
+	// A fallback answer is deliberately short-lived server-side so the
+	// upstream is retried once it recovers; caching it longer downstream would
+	// defeat exactly that.
+	cacheIPFallback = "public, max-age=600, s-maxage=600"
+	// SSL days_remaining ticks down daily and the resolved address drifts.
+	cacheDomain = "public, max-age=300, s-maxage=300"
+	// Unroutable addresses get asked for over and over; let the edge absorb it.
+	cacheNotFound = "public, max-age=60"
+	cacheNone     = "no-store"
+)
+
+func jsonResponse(writer http.ResponseWriter, status int, cacheControl string, value any) {
 	writer.Header().Set("Content-Type", "application/json; charset=utf-8")
 	writer.Header().Set("Access-Control-Allow-Origin", "*")
 	writer.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS")
 	writer.Header().Set("Access-Control-Allow-Headers", "Content-Type")
-	switch {
-	case status == http.StatusOK:
-		writer.Header().Set("Cache-Control", "public, max-age=300")
-	case status == http.StatusNotFound:
-		// Let the edge absorb repeated misses for unroutable addresses.
-		writer.Header().Set("Cache-Control", "public, max-age=60")
-	default:
-		writer.Header().Set("Cache-Control", "no-store")
-	}
+	writer.Header().Set("Cache-Control", cacheControl)
 	writer.WriteHeader(status)
 	_ = json.NewEncoder(writer).Encode(value)
 }
@@ -1113,17 +1125,17 @@ func (service *geoService) handler(limiter *limiter) http.Handler {
 			return
 		}
 		if request.Method != http.MethodGet {
-			jsonResponse(writer, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
+			jsonResponse(writer, http.StatusMethodNotAllowed, cacheNone, map[string]string{"error": "method_not_allowed"})
 			return
 		}
 		if !limiter.allow(clientKey(request)) {
 			writer.Header().Set("Retry-After", "60")
-			jsonResponse(writer, http.StatusTooManyRequests, map[string]string{"error": "rate_limited"})
+			jsonResponse(writer, http.StatusTooManyRequests, cacheNone, map[string]string{"error": "rate_limited"})
 			return
 		}
 		pathParts := strings.Split(strings.Trim(request.URL.Path, "/"), "/")
 		if request.URL.Path == "/" || request.URL.Path == "/health" {
-			jsonResponse(writer, http.StatusOK, map[string]any{"ok": true, "service": "IP Flag Geo API"})
+			jsonResponse(writer, http.StatusOK, cacheNone, map[string]any{"ok": true, "service": "IP Flag Geo API"})
 			return
 		}
 		endpoint := pathParts[0]
@@ -1134,7 +1146,7 @@ func (service *geoService) handler(limiter *limiter) http.Handler {
 			value = request.URL.Query().Get(endpoint)
 		}
 		if (endpoint != "ip" && endpoint != "domain") || value == "" || len(pathParts) > 2 {
-			jsonResponse(writer, http.StatusNotFound, map[string]any{"error": "not_found", "endpoints": []string{"/ip/:ip", "/domain/:domain"}})
+			jsonResponse(writer, http.StatusNotFound, cacheNone, map[string]any{"error": "not_found", "endpoints": []string{"/ip/:ip", "/domain/:domain"}})
 			return
 		}
 		var ip net.IP
@@ -1145,25 +1157,25 @@ func (service *geoService) handler(limiter *limiter) http.Handler {
 			ip = net.ParseIP(strings.Trim(value, "[]"))
 			query = value
 			if ip == nil {
-				jsonResponse(writer, http.StatusBadRequest, map[string]string{"error": "invalid_ip"})
+				jsonResponse(writer, http.StatusBadRequest, cacheNone, map[string]string{"error": "invalid_ip"})
 				return
 			}
 		} else {
 			domain, err = cleanDomain(value)
 			query = domain
 			if err != nil {
-				jsonResponse(writer, http.StatusBadRequest, map[string]string{"error": "invalid_domain"})
+				jsonResponse(writer, http.StatusBadRequest, cacheNone, map[string]string{"error": "invalid_domain"})
 				return
 			}
 			ip, err = resolveDomain(domain)
 			if err != nil {
-				jsonResponse(writer, http.StatusNotFound, map[string]string{"error": "domain_not_resolved", "domain": domain})
+				jsonResponse(writer, http.StatusNotFound, cacheNotFound, map[string]string{"error": "domain_not_resolved", "domain": domain})
 				return
 			}
 		}
 		record, err := service.lookup(ip)
 		if err != nil || record == nil {
-			jsonResponse(writer, http.StatusNotFound, map[string]string{"error": "ip_not_found", "ip": ip.String()})
+			jsonResponse(writer, http.StatusNotFound, cacheNotFound, map[string]string{"error": "ip_not_found", "ip": ip.String()})
 			return
 		}
 		// The cached record is shared between requests; flat() builds a fresh
@@ -1171,10 +1183,17 @@ func (service *geoService) handler(limiter *limiter) http.Handler {
 		result := record.flat()
 		result["query"] = query
 		result["query_type"] = endpoint
+		// Risk fields are only present on an upstream answer, which makes them
+		// the signal for how long this response may be cached downstream.
+		cacheControl := cacheIPFallback
+		if record.Risk != nil {
+			cacheControl = cacheIPUpstream
+		}
 		if domain != "" {
 			result["ssl"] = service.ssl(domain)
+			cacheControl = cacheDomain
 		}
-		jsonResponse(writer, http.StatusOK, result)
+		jsonResponse(writer, http.StatusOK, cacheControl, result)
 	})
 }
 
