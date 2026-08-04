@@ -26,7 +26,7 @@ const sections = [
   },
   {
     title: "Third-party services",
-    body: "IP Flag uses its own geolocation API. That API resolves lookups through ipapi.is as its primary source and falls back to local DB-IP Lite databases, with MaxMind GeoLite2 as a supplemental source, whenever the upstream is unavailable. Successful lookups are cached on our server for up to 30 days so the same address is not sent again. An optional map image service renders the approximate server location. DB-IP and MaxMind attribution are provided on this site. Opening optional external links is always initiated by the user.",
+    body: "IP Flag uses its own geolocation API. That API resolves every lookup through ipapi.is. Successful lookups are cached on our server for up to 30 days so the same address is not sent again. An optional map image service renders the approximate server location. Opening optional external links is always initiated by the user.",
   },
   {
     title: "Changes",
@@ -64,8 +64,6 @@ export default function PrivacyPage() {
       </article>
       <footer className="legal-footer shell">
         <span>© 2026 IP Flag</span>
-        <a href="https://db-ip.com" target="_blank" rel="noreferrer">IP Geolocation by DB-IP</a>
-        <a href="https://www.maxmind.com" target="_blank" rel="noreferrer">GeoLite Data by MaxMind</a>
         <a href="https://ipflag.io">ipflag.io</a>
       </footer>
     </main>

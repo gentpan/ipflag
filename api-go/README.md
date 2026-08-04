@@ -8,27 +8,12 @@ domain lookups.
 The service intentionally does not expose a provider/source field in its
 public response.
 
-## Data sources
+## Data source
 
-`ipapi.is` is the primary source. The local DB-IP Lite databases (city and
-ASN, supplemented by MaxMind GeoLite2 when present) remain installed and are
-used as the fallback whenever ipapi.is is unset, unreachable, out of quota or
-unable to answer. The DB-IP databases are still required at startup: the
-service refuses to start without them, because they are what keeps it serving
-during an upstream outage.
-
-Fallback answers are cached for only 10 minutes, so ipapi.is is retried
-shortly after it recovers instead of being shadowed for a month.
-
-The risk fields below are only present when ipapi.is answered. Their absence
-means "unknown", not "false" — the fallback databases cannot provide them.
-
-| Field | Source |
-| --- | --- |
-| `country_code` `country` `continent` `region` `city` `latitude` `longitude` `timezone` `postal_code` `accuracy` | ipapi.is, fallback DB-IP Lite (`accuracy` fallback: absent) |
-| `asn` `isp` | ipapi.is, fallback DB-IP ASN Lite |
-| `is_datacenter` `datacenter` `is_vpn` `is_proxy` `is_tor` `is_abuser` `abuser_score` | ipapi.is only |
-| `ssl` | live TLS handshake against the domain, no database involved |
+[ipapi.is](https://ipapi.is) is the only source. There is no local database and
+no fallback: `IPAPI_IS_KEY` is required and the service refuses to start
+without it. When the upstream cannot answer, neither can this API — the
+request returns 404 and the extension shows no flag.
 
 ## Caching
 
@@ -39,9 +24,8 @@ eviction instead of hand-rolled file juggling. A NULL record is a tombstone.
 | Outcome | TTL | Why |
 | --- | ---: | --- |
 | ipapi.is answered | `GEO_CACHE_TTL`, 30 days | Answers are stable for weeks, each miss spends quota, and ipapi.is caps caching at 30 days |
-| Upstream failed or out of budget | 10 min | Retry the upstream shortly after it recovers |
-| Upstream healthy but has no record | 24 h | Asking again changes nothing |
-| Neither source can place the address | 24 h | A tombstone; without it every intranet navigation spends a request |
+| Upstream failed | not cached | So the next request retries instead of serving a hole |
+| Upstream has no record for the address | 24 h | A tombstone; without it every intranet navigation spends a request |
 
 Expired rows, and the oldest rows past `GEO_CACHE_MAX`, are pruned hourly. To
 drop everything, stop the service, delete the database file and start again.
@@ -49,12 +33,15 @@ drop everything, stop the service, delete the database file and start again.
 ## Quota and failure handling
 
 ipapi.is returns no rate-limit headers, so the budget is counted locally.
-`IPAPI_IS_DAILY_LIMIT` requests per UTC day are allowed; past that the service
-serves from the local databases until midnight. Usage is logged every 500 calls.
+`IPAPI_IS_DAILY_LIMIT` requests per UTC day are allowed; past that lookups fail
+until midnight. Usage is logged every 500 calls.
 
 - Concurrent lookups of the same IP collapse into one upstream call.
 - Private, loopback, link-local and CGNAT addresses never reach ipapi.is: they
   are in no geo database, and sending them would disclose internal addressing.
+- At most `IPAPI_IS_MAX_INFLIGHT` requests run at once. ipapi.is rate-limits
+  bursts per source IP and everything here leaves from one address: 39 requests
+  in one second earned 42 HTTP 429s on 2026-08-04.
 - After five consecutive failures the upstream is skipped for a minute.
 - Redirects are refused: Go copies the request URL into `Referer` when it
   follows one. The key travels in the POST body, never in the query string.
@@ -66,16 +53,14 @@ serves from the local databases until midnight. Usage is logged every 500 calls.
 | `PORT` | `4320` | Listen port |
 | `HOST` | `127.0.0.1` | Listen address |
 | `RATE_LIMIT` | `120` | Requests per minute per client |
-| `IPAPI_IS_KEY` | *(unset)* | ipapi.is API key. **Unset disables the upstream entirely** and serves from the local databases only |
+| `IPAPI_IS_KEY` | *(required)* | ipapi.is API key. The service will not start without it |
 | `IPAPI_IS_URL` | `https://api.ipapi.is` | Upstream base URL |
 | `IPAPI_IS_TIMEOUT` | `4s` | Upstream request timeout |
+| `IPAPI_IS_MAX_INFLIGHT` | `12` | Concurrent upstream requests |
 | `IPAPI_IS_DAILY_LIMIT` | `20000` | Upstream requests per UTC day; `0` disables the budget |
 | `GEO_CACHE_TTL` | `720h` (30 days) | How long successful upstream lookups are cached |
 | `GEO_CACHE_PATH` | `/var/lib/ipflag-api/geo-cache.db` | SQLite cache file |
 | `GEO_CACHE_MAX` | `500000` | Maximum cached IPs before eviction |
-| `DBIP_MMDB_PATH` | `/opt/ipflag-api/current/data/dbip-city-lite.mmdb` | Fallback city database (required) |
-| `DBIP_ASN_MMDB_PATH` | `/opt/ipflag-api/current/data/dbip-asn-lite.mmdb` | Fallback ASN database (required) |
-| `MAXMIND_CITY_MMDB_PATH` | `/opt/ipflag-api/current/data/GeoLite2-City.mmdb` | Optional supplement for the fallback path |
 
 ## Credentials
 
@@ -89,13 +74,7 @@ install -m 0640 -o root -g www-data deploy/ipapi.env.example /etc/ipflag-api/ipa
 ```
 
 The key must never be committed and must never reach the browser extension:
-the extension talks to this API, and this API talks to ipapi.is. MaxMind
-credentials live alongside it in `/etc/ipflag-api/maxmind.env` and are read
-only by the update timer.
-
-Install `ipflag-dbip-update.service`/`ipflag-dbip-update.timer` and
-`ipflag-maxmind-update.service`/`ipflag-maxmind-update.timer` alongside the API
-service to keep the fallback databases fresh.
+the extension talks to this API, and this API talks to ipapi.is.
 
 ## Local development
 
@@ -104,8 +83,5 @@ go build -o ipflag-api .
 ```
 
 ```sh
-IPAPI_IS_KEY=... DBIP_MMDB_PATH=./data/dbip-city-lite.mmdb DBIP_ASN_MMDB_PATH=./data/dbip-asn-lite.mmdb GEO_CACHE_PATH=./geo-cache.db ./ipflag-api
+IPAPI_IS_KEY=... GEO_CACHE_PATH=./geo-cache.db ./ipflag-api
 ```
-
-DB-IP Lite is downloadable without an account:
-`https://download.db-ip.com/free/dbip-city-lite-<YYYY-MM>.mmdb.gz`.

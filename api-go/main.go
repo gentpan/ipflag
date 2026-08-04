@@ -22,7 +22,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/oschwald/maxminddb-golang"
 	_ "modernc.org/sqlite"
 )
 
@@ -36,20 +35,19 @@ const (
 	// ipapi.is answers are stable for weeks and every miss spends a request
 	// from a metered daily quota. Its terms also cap caching at 30 days.
 	defaultGeoCacheTTL = 30 * 24 * time.Hour
-	// Fallback answers come from the local databases while ipapi.is is
-	// unreachable; they expire quickly so the upstream is retried soon after it
-	// recovers instead of being shadowed for a month.
-	fallbackCacheTTL = 10 * time.Minute
 	// Addresses the upstream has no record for, and addresses we never ask it
-	// about. A day stops an intranet browsing session from spending the quota
-	// on every navigation.
+	// about. A day stops an intranet browsing session from spending the quota.
 	noDataCacheTTL = 24 * time.Hour
 
 	defaultUpstreamURL     = "https://api.ipapi.is"
 	defaultUpstreamTimeout = 4 * time.Second
 	defaultDailyLimit      = 20000
-	defaultCacheMax        = 500000
-	defaultCachePath       = "/var/lib/ipflag-api/geo-cache.db"
+	// ipapi.is rate-limits per source IP at their edge, and every lookup here
+	// leaves from one server. 39 requests in a single second earned 42 HTTP
+	// 429s on 2026-08-04; with no local fallback those are missing flags.
+	defaultMaxInflight = 12
+	defaultCacheMax    = 500000
+	defaultCachePath   = "/var/lib/ipflag-api/geo-cache.db"
 
 	breakerTrip     = 5
 	breakerCooldown = time.Minute
@@ -59,11 +57,10 @@ const (
 // extension's fetches set no cache option, so these headers really do reach the
 // browser's own HTTP cache.
 const (
-	cacheIPUpstream = "public, max-age=3600, s-maxage=86400, stale-if-error=604800"
-	cacheIPFallback = "public, max-age=600, s-maxage=600"
-	cacheDomain     = "public, max-age=300, s-maxage=300"
-	cacheNotFound   = "public, max-age=60"
-	cacheNone       = "no-store"
+	cacheIP       = "public, max-age=3600, s-maxage=86400, stale-if-error=604800"
+	cacheDomain   = "public, max-age=300, s-maxage=300"
+	cacheNotFound = "public, max-age=60"
+	cacheNone     = "no-store"
 )
 
 var (
@@ -78,8 +75,7 @@ var (
 
 // ------------------------------------------------------------- geo records
 
-// riskFlags is only populated when ipapi.is answered. A nil pointer means the
-// signals are unknown, which is different from all-false.
+// riskFlags accompanies every answer, since ipapi.is is the only source.
 type riskFlags struct {
 	IsDatacenter bool   `json:"d"`
 	IsVPN        bool   `json:"v"`
@@ -107,9 +103,7 @@ type geoRecord struct {
 	Risk        *riskFlags `json:"rk,omitempty"`
 }
 
-// flat renders the public response shape. Absent risk keys mean "unknown" —
-// the fallback databases cannot provide them — so they are omitted entirely
-// rather than defaulted to false.
+// flat renders the public response shape.
 func (record *geoRecord) flat() map[string]any {
 	value := map[string]any{
 		"ip":           record.IP,
@@ -142,35 +136,6 @@ func (record *geoRecord) flat() map[string]any {
 		}
 	}
 	return value
-}
-
-type names struct {
-	Names map[string]string `maxminddb:"names"`
-}
-
-type cityRecord struct {
-	Continent struct {
-		Code string `maxminddb:"code"`
-	} `maxminddb:"continent"`
-	Country struct {
-		ISOCode string            `maxminddb:"iso_code"`
-		Names   map[string]string `maxminddb:"names"`
-	} `maxminddb:"country"`
-	Subdivisions []names `maxminddb:"subdivisions"`
-	City         names   `maxminddb:"city"`
-	Postal       struct {
-		Code string `maxminddb:"code"`
-	} `maxminddb:"postal"`
-	Location struct {
-		Latitude  float64 `maxminddb:"latitude"`
-		Longitude float64 `maxminddb:"longitude"`
-		TimeZone  string  `maxminddb:"time_zone"`
-	} `maxminddb:"location"`
-}
-
-type asnRecord struct {
-	Number       uint32 `maxminddb:"autonomous_system_number"`
-	Organization string `maxminddb:"autonomous_system_organization"`
 }
 
 // upstreamRecord mirrors the subset of the ipapi.is response the API exposes.
@@ -397,6 +362,7 @@ type upstreamClient struct {
 	endpoint string
 	key      string
 	client   *http.Client
+	inflight chan struct{}
 
 	mu        sync.Mutex
 	failures  int
@@ -406,11 +372,12 @@ type upstreamClient struct {
 	limit     int
 }
 
-func newUpstreamClient(endpoint, key string, timeout time.Duration, dailyLimit int) *upstreamClient {
+func newUpstreamClient(endpoint, key string, timeout time.Duration, dailyLimit, maxInflight int) *upstreamClient {
 	return &upstreamClient{
 		endpoint: strings.TrimRight(endpoint, "/"),
 		key:      key,
 		limit:    dailyLimit,
+		inflight: make(chan struct{}, maxInflight),
 		client: &http.Client{
 			Timeout: timeout,
 			// Go copies the request URL into Referer when it follows a
@@ -484,6 +451,14 @@ func (upstream *upstreamClient) redact(err error) error {
 func (upstream *upstreamClient) lookup(ip net.IP) (*upstreamRecord, error) {
 	if err := upstream.admit(); err != nil {
 		return nil, err
+	}
+	// Bounded concurrency: ipapi.is limits bursts per source IP, and everything
+	// here leaves from one address.
+	select {
+	case upstream.inflight <- struct{}{}:
+		defer func() { <-upstream.inflight }()
+	case <-time.After(upstream.client.Timeout):
+		return nil, errors.New("ipapi.is concurrency limit reached")
 	}
 	record, err := upstream.request(ip)
 	return record, upstream.redact(err)
@@ -568,15 +543,12 @@ func upstreamGeoRecord(ip string, record *upstreamRecord) *geoRecord {
 // ---------------------------------------------------------------- service
 
 type geoService struct {
-	city        *maxminddb.Reader
-	asn         *maxminddb.Reader
-	maxmindCity *maxminddb.Reader
-	upstream    *upstreamClient
-	cache       *geoCache
-	cacheTTL    time.Duration
-	group       *singleFlight
-	sslMu       sync.Mutex
-	sslCache    map[string]sslCacheEntry
+	upstream *upstreamClient
+	cache    *geoCache
+	cacheTTL time.Duration
+	group    *singleFlight
+	sslMu    sync.Mutex
+	sslCache map[string]sslCacheEntry
 }
 
 type sslCacheEntry struct {
@@ -585,52 +557,25 @@ type sslCacheEntry struct {
 }
 
 func openService() (*geoService, error) {
-	dbipCity, err := maxminddb.Open(env("DBIP_MMDB_PATH", "/opt/ipflag-api/current/data/dbip-city-lite.mmdb"))
-	if err != nil {
-		return nil, fmt.Errorf("open DB-IP City database: %w", err)
-	}
-	dbipASN, err := maxminddb.Open(env("DBIP_ASN_MMDB_PATH", "/opt/ipflag-api/current/data/dbip-asn-lite.mmdb"))
-	if err != nil {
-		dbipCity.Close()
-		return nil, fmt.Errorf("open DB-IP ASN database: %w", err)
-	}
-	maxmindCity, err := maxminddb.Open(env("MAXMIND_CITY_MMDB_PATH", "/opt/ipflag-api/current/data/GeoLite2-City.mmdb"))
-	if err != nil {
-		log.Printf("MaxMind GeoLite2 supplement unavailable: %v", err)
-		maxmindCity = nil
+	key := os.Getenv("IPAPI_IS_KEY")
+	if key == "" {
+		return nil, errors.New("IPAPI_IS_KEY is required: ipapi.is is the only geolocation source")
 	}
 	cache, err := openCache(env("GEO_CACHE_PATH", defaultCachePath), envInt("GEO_CACHE_MAX", defaultCacheMax, 1))
 	if err != nil {
-		dbipCity.Close()
-		dbipASN.Close()
 		return nil, fmt.Errorf("open geo cache: %w", err)
 	}
-
-	var upstream *upstreamClient
-	if key := os.Getenv("IPAPI_IS_KEY"); key != "" {
-		limit := envInt("IPAPI_IS_DAILY_LIMIT", defaultDailyLimit, 0)
-		upstream = newUpstreamClient(
-			env("IPAPI_IS_URL", defaultUpstreamURL), key,
-			envDuration("IPAPI_IS_TIMEOUT", defaultUpstreamTimeout), limit)
-		log.Printf("ipapi.is is the primary source, daily limit %d, local databases used as fallback", limit)
-	} else {
-		log.Printf("IPAPI_IS_KEY is not set, serving from the local databases only")
-	}
-
+	limit := envInt("IPAPI_IS_DAILY_LIMIT", defaultDailyLimit, 0)
+	inflight := envInt("IPAPI_IS_MAX_INFLIGHT", defaultMaxInflight, 1)
+	log.Printf("ipapi.is is the only source, daily limit %d, at most %d concurrent requests", limit, inflight)
 	return &geoService{
-		city: dbipCity, asn: dbipASN, maxmindCity: maxmindCity,
-		upstream: upstream, cache: cache,
+		upstream: newUpstreamClient(env("IPAPI_IS_URL", defaultUpstreamURL), key,
+			envDuration("IPAPI_IS_TIMEOUT", defaultUpstreamTimeout), limit, inflight),
+		cache:    cache,
 		cacheTTL: envDuration("GEO_CACHE_TTL", defaultGeoCacheTTL),
 		group:    newSingleFlight(),
 		sslCache: make(map[string]sslCacheEntry),
 	}, nil
-}
-
-func text(values map[string]string, key string) string {
-	if values == nil {
-		return ""
-	}
-	return values[key]
 }
 
 // routable reports whether it is worth asking a geolocation service about an
@@ -645,8 +590,8 @@ func routable(ip net.IP) bool {
 	return ok && !cgnatRange.Contains(address.Unmap())
 }
 
-// lookup resolves an IP through ipapi.is, falling back to the local databases
-// when the upstream is unset, broken, out of quota or unable to answer.
+// lookup resolves an IP through ipapi.is. There is no fallback: if the
+// upstream cannot answer, neither can we.
 func (service *geoService) lookup(ip net.IP) (*geoRecord, error) {
 	key := ip.String()
 	if record, hit := service.cache.get(key); hit {
@@ -655,6 +600,12 @@ func (service *geoService) lookup(ip net.IP) (*geoRecord, error) {
 		}
 		return record, nil
 	}
+	if !routable(ip) {
+		// Private, loopback, link-local and CGNAT addresses are in no geo
+		// database. Remember that so intranet browsing costs nothing.
+		service.cache.put(key, nil, noDataCacheTTL)
+		return nil, errNoGeoData
+	}
 	return service.group.do(key, func() (*geoRecord, error) {
 		if record, hit := service.cache.get(key); hit {
 			if record == nil {
@@ -662,88 +613,28 @@ func (service *geoService) lookup(ip net.IP) (*geoRecord, error) {
 			}
 			return record, nil
 		}
-
-		// A local answer normally expires quickly so the upstream is retried
-		// soon after it recovers. When the upstream is healthy and simply has
-		// no record, or we never ask it, that retry would be pure waste.
-		ttl := noDataCacheTTL
-		if service.upstream != nil && routable(ip) {
-			record, err := service.upstream.lookup(ip)
-			switch {
-			case err == nil:
-				service.upstream.succeeded()
-				resolved := upstreamGeoRecord(key, record)
-				service.cache.put(key, resolved, service.cacheTTL)
-				return resolved, nil
-			case errors.Is(err, errUpstreamNoData):
-				service.upstream.succeeded() // healthy, just no record
-			case errors.Is(err, errUpstreamQuota):
-				ttl = fallbackCacheTTL // retry when the budget rolls over
-			default:
-				service.upstream.failed()
-				ttl = fallbackCacheTTL
-				log.Printf("ipapi.is lookup for %s failed, using local databases: %v", key, err)
-			}
-		}
-
-		record, err := service.localLookup(ip)
-		if err != nil {
-			// Neither source can place this address. Remember that, or every
-			// navigation to an intranet host spends another upstream request.
+		record, err := service.upstream.lookup(ip)
+		switch {
+		case err == nil:
+			service.upstream.succeeded()
+			resolved := upstreamGeoRecord(key, record)
+			service.cache.put(key, resolved, service.cacheTTL)
+			return resolved, nil
+		case errors.Is(err, errUpstreamNoData):
+			service.upstream.succeeded() // healthy, just no record for this address
 			service.cache.put(key, nil, noDataCacheTTL)
 			return nil, errNoGeoData
+		case errors.Is(err, errUpstreamQuota):
+			// Nothing to cache: the budget rolls over at UTC midnight.
+			return nil, errNoGeoData
+		default:
+			service.upstream.failed()
+			log.Printf("ipapi.is lookup for %s failed: %v", key, err)
+			// Not cached either, so the next request retries once the breaker
+			// closes rather than serving a hole for ten minutes.
+			return nil, errNoGeoData
 		}
-		service.cache.put(key, record, ttl)
-		return record, nil
 	})
-}
-
-// localLookup is the original DB-IP primary / MaxMind supplement path, kept as
-// the fallback so a degraded service still answers as it always did.
-func (service *geoService) localLookup(ip net.IP) (*geoRecord, error) {
-	var city cityRecord
-	if err := service.city.Lookup(ip, &city); err != nil {
-		return nil, err
-	}
-	var supplement cityRecord
-	if service.maxmindCity != nil {
-		_ = service.maxmindCity.Lookup(ip, &supplement)
-	}
-	var asn asnRecord
-	if err := service.asn.Lookup(ip, &asn); err != nil {
-		return nil, err
-	}
-	code := strings.ToUpper(city.Country.ISOCode)
-	if code == "" {
-		city = supplement
-		code = strings.ToUpper(city.Country.ISOCode)
-	}
-	if code == "" {
-		return nil, errNoGeoData
-	}
-	record := &geoRecord{
-		IP:          ip.String(),
-		Continent:   city.Continent.Code,
-		CountryCode: code,
-		Country:     text(city.Country.Names, "en"),
-		Latitude:    city.Location.Latitude,
-		Longitude:   city.Location.Longitude,
-		Timezone:    firstNonEmpty(city.Location.TimeZone, supplement.Location.TimeZone),
-		PostalCode:  firstNonEmpty(city.Postal.Code, supplement.Postal.Code),
-		City:        text(city.City.Names, "en"),
-		ISP:         asn.Organization,
-	}
-	if city.Location.Latitude == 0 && city.Location.Longitude == 0 {
-		record.Latitude = supplement.Location.Latitude
-		record.Longitude = supplement.Location.Longitude
-	}
-	if len(city.Subdivisions) > 0 {
-		record.Region = text(city.Subdivisions[0].Names, "en")
-	}
-	if asn.Number != 0 {
-		record.ASN = "AS" + strconv.FormatUint(uint64(asn.Number), 10)
-	}
-	return record, nil
 }
 
 func cleanDomain(raw string) (string, error) {
@@ -914,12 +805,7 @@ func (service *geoService) handler(limiter *limiter) http.Handler {
 		result := record.flat()
 		result["query"] = query
 		result["query_type"] = endpoint
-		// Risk fields only exist on an upstream answer, which makes them the
-		// signal for how long this response may be cached downstream.
-		cacheControl := cacheIPFallback
-		if record.Risk != nil {
-			cacheControl = cacheIPUpstream
-		}
+		cacheControl := cacheIP
 		if domain != "" {
 			result["ssl"] = service.ssl(domain)
 			cacheControl = cacheDomain
@@ -933,12 +819,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer service.city.Close()
-	defer service.asn.Close()
 	defer service.cache.db.Close()
-	if service.maxmindCity != nil {
-		defer service.maxmindCity.Close()
-	}
 
 	go func() {
 		service.cache.prune()

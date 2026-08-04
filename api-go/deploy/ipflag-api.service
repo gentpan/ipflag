@@ -10,16 +10,14 @@ Group=www-data
 WorkingDirectory=/opt/ipflag-api/current
 Environment=PORT=4320
 Environment=HOST=127.0.0.1
-Environment=DBIP_MMDB_PATH=/opt/ipflag-api/current/data/dbip-city-lite.mmdb
-Environment=DBIP_ASN_MMDB_PATH=/opt/ipflag-api/current/data/dbip-asn-lite.mmdb
-Environment=MAXMIND_CITY_MMDB_PATH=/opt/ipflag-api/current/data/GeoLite2-City.mmdb
 Environment=RATE_LIMIT=120
-# Primary geolocation source. The key lives in a root-owned file that is never
-# committed; without it the service falls back to the local databases.
+# The only geolocation source. The key lives in a root-owned file that is
+# never committed; the service refuses to start without it.
 EnvironmentFile=-/etc/ipflag-api/ipapi.env
 # ipapi.is publishes no quota headers, so the budget is enforced locally.
-# Reaching it degrades to the local databases for the rest of the UTC day.
+# It also rate-limits bursts per source IP, hence the concurrency cap.
 Environment=IPAPI_IS_DAILY_LIMIT=20000
+Environment=IPAPI_IS_MAX_INFLIGHT=12
 Environment=IPAPI_IS_TIMEOUT=4s
 Environment=GEO_CACHE_TTL=720h
 Environment=GEO_CACHE_PATH=/var/lib/ipflag-api/geo-cache.db

@@ -41,20 +41,12 @@
 
 <h2>数据共享</h2>
 <p>本扩展不出售或用于广告画像。网站主机名仅发送到 <a href="https://api.ipflag.io">IP Flag API</a> 以完成查询，不包含页面内容、账号信息或密码。</p>
-<p>为完成地理位置查询，IP Flag API 会将解析出的服务器 IP 转发给第三方地理位置服务商 <a href="https://ipapi.is">ipapi.is</a>。转发的内容仅为该 IP 地址本身，不包含主机名、页面内容或任何可识别您身份的信息。查询结果在服务端缓存最长 30 天，以减少重复请求。</p>
+<p>为完成地理位置查询，IP Flag API 会将解析出的服务器 IP 转发给地理位置服务商 <a href="https://ipapi.is">ipapi.is</a>。转发的内容仅为该 IP 地址本身，不包含主机名、页面内容或任何可识别您身份的信息。查询结果在服务端缓存最长 30 天，以减少重复请求。</p>
 
 <h2>第三方服务</h2>
 <ul>
-  <li><strong>ipapi.is</strong> - 主要的 IP 地理位置数据提供方，接收待查询的服务器 IP 地址</li>
-  <li><strong>IP Flag API</strong> - 本项目自有服务，在 ipapi.is 不可用时改用本地 DB-IP Lite 与 MaxMind GeoLite2 数据库作答，此时不产生任何对外请求</li>
+  <li><strong>ipapi.is</strong> - IP 地理位置数据提供方，接收待查询的服务器 IP 地址</li>
   <li><strong>map.bluecdn.com</strong> - 提供地图图片显示</li>
-</ul>
-
-<h2>数据来源署名</h2>
-<p>兜底数据库按其许可要求署名：</p>
-<ul>
-  <li><a href="https://db-ip.com">IP Geolocation by DB-IP</a>（DB-IP Lite，CC BY 4.0）</li>
-  <li><a href="https://www.maxmind.com">GeoLite Data by MaxMind</a></li>
 </ul>
 
 <h2>联系方式</h2>

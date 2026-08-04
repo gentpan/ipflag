@@ -81,7 +81,7 @@ Example response:
 
 Domain responses also include SSL check time, certificate validity, expiry time, remaining days, subject and issuer. The public response intentionally omits a provider/source field.
 
-[ipapi.is](https://ipapi.is) is the primary geolocation source; the local DB-IP Lite databases stay installed as the fallback for when the upstream is unreachable or out of quota. Successful lookups are cached for 30 days across restarts. The `is_datacenter`/`is_vpn`/`is_proxy`/`is_tor`/`is_abuser`/`abuser_score`/`accuracy` fields come from ipapi.is only — when they are absent the value is unknown, not false. See [`api-go/README.md`](api-go/README.md).
+[ipapi.is](https://ipapi.is) is the only geolocation source; there is no local database and no fallback. Successful lookups are cached for 30 days across restarts. See [`api-go/README.md`](api-go/README.md).
 
 ## Install locally
 
@@ -125,7 +125,7 @@ background.js       Chrome service worker and toolbar flag updates
 popup.html/js/css   Extension popup UI
 flags/              Country flag assets
 icons/              Browser and store icons
-api-go/             Production Go API, deployment and DB update timer
+api-go/             Production Go API and deployment unit
 website/            Multilingual product website
 store-assets/       Chrome Web Store listing artwork
 manifest.json       Chrome Extension Manifest V3

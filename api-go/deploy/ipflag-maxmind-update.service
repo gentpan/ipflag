@@ -1,6 +1,0 @@
-[Unit]
-Description=Update MaxMind GeoLite2 databases for IP Flag
-
-[Service]
-Type=oneshot
-ExecStart=/opt/ipflag-api/current/deploy/update-maxmind.sh

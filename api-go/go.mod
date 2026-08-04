@@ -2,10 +2,7 @@ module github.com/gentpan/ipflag/api-go
 
 go 1.26
 
-require (
-	github.com/oschwald/maxminddb-golang v1.13.1
-	modernc.org/sqlite v1.55.0
-)
+require modernc.org/sqlite v1.55.0
 
 require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
