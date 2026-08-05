@@ -11,14 +11,17 @@ WorkingDirectory=/opt/ipflag-api/current
 Environment=PORT=4320
 Environment=HOST=127.0.0.1
 Environment=RATE_LIMIT=120
-# The only geolocation source. The key lives in a root-owned file that is
-# never committed; the service refuses to start without it.
+# Geolocation sources, tried in order. Keys live in a root-owned file that is
+# never committed; a source with no key is skipped.
 EnvironmentFile=-/etc/ipflag-api/ipapi.env
-# ipapi.is publishes no quota headers, so the budget is enforced locally.
-# It also rate-limits bursts per source IP, hence the concurrency cap.
+# ip2location.io free tier is a 50K monthly pool; the daily cap spreads it.
+Environment=IP2LOCATION_DAILY_LIMIT=1600
+# cnip.io is self-hosted, so it has no budget.
+Environment=CNIP_URL=https://api.cnip.io
 Environment=IPAPI_IS_DAILY_LIMIT=20000
-Environment=IPAPI_IS_MAX_INFLIGHT=12
-Environment=IPAPI_IS_TIMEOUT=4s
+# Providers rate-limit bursts per source IP and everything leaves from here.
+Environment=UPSTREAM_MAX_INFLIGHT=12
+Environment=UPSTREAM_TIMEOUT=4s
 Environment=GEO_CACHE_TTL=720h
 Environment=GEO_CACHE_PATH=/var/lib/ipflag-api/geo-cache.db
 Environment=GEO_CACHE_MAX=500000

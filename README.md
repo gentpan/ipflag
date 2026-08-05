@@ -81,7 +81,7 @@ Example response:
 
 Domain responses also include SSL check time, certificate validity, expiry time, remaining days, subject and issuer. The public response intentionally omits a provider/source field.
 
-[ipapi.is](https://ipapi.is) is the only geolocation source; there is no local database and no fallback. Successful lookups are cached for 30 days across restarts. See [`api-go/README.md`](api-go/README.md).
+Three geolocation providers are tried in order — [ip2location.io](https://ip2location.io), then a self-hosted `cnip.io`, then [ipapi.is](https://ipapi.is) — so a source running out of budget degrades instead of failing. Successful lookups are cached for 30 days across restarts. Which fields are present depends on which source answered. See [`api-go/README.md`](api-go/README.md).
 
 ## Install locally
 

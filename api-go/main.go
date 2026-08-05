@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"net/url"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -39,9 +40,13 @@ const (
 	// about. A day stops an intranet browsing session from spending the quota.
 	noDataCacheTTL = 24 * time.Hour
 
-	defaultUpstreamURL     = "https://api.ipapi.is"
+	defaultIP2LocationURL  = "https://api.ip2location.io"
+	defaultCnipURL         = "https://api.cnip.io"
+	defaultIPAPIIsURL      = "https://api.ipapi.is"
 	defaultUpstreamTimeout = 4 * time.Second
-	defaultDailyLimit      = 20000
+	// ip2location.io free tier is 50K a month.
+	defaultIP2LocationDaily = 1600
+	defaultIPAPIIsDaily     = 20000
 	// ipapi.is rate-limits per source IP at their edge, and every lookup here
 	// leaves from one server. 39 requests in a single second earned 42 HTTP
 	// 429s on 2026-08-04; with no local fallback those are missing flags.
@@ -69,8 +74,8 @@ var (
 	cgnatRange = netip.MustParsePrefix("100.64.0.0/10")
 
 	errNoGeoData      = errors.New("no geolocation data for this IP")
-	errUpstreamNoData = errors.New("ipapi.is has no record for this IP")
-	errUpstreamQuota  = errors.New("ipapi.is daily quota reached")
+	errUpstreamNoData = errors.New("upstream has no record for this IP")
+	errUpstreamQuota  = errors.New("upstream daily quota reached")
 )
 
 // ------------------------------------------------------------- geo records
@@ -87,40 +92,46 @@ type riskFlags struct {
 }
 
 type geoRecord struct {
-	IP          string     `json:"ip"`
-	Continent   string     `json:"co,omitempty"`
-	CountryCode string     `json:"cc"`
-	Country     string     `json:"cn,omitempty"`
-	Region      string     `json:"rg,omitempty"`
-	City        string     `json:"ct,omitempty"`
-	Latitude    float64    `json:"la"`
-	Longitude   float64    `json:"lo"`
-	Timezone    string     `json:"tz,omitempty"`
-	PostalCode  string     `json:"pc,omitempty"`
-	Accuracy    string     `json:"ac,omitempty"`
-	ASN         string     `json:"as,omitempty"`
-	ISP         string     `json:"is,omitempty"`
-	Risk        *riskFlags `json:"rk,omitempty"`
+	IP          string  `json:"ip"`
+	Continent   string  `json:"co,omitempty"`
+	CountryCode string  `json:"cc"`
+	Country     string  `json:"cn,omitempty"`
+	Region      string  `json:"rg,omitempty"`
+	City        string  `json:"ct,omitempty"`
+	Latitude    float64 `json:"la"`
+	Longitude   float64 `json:"lo"`
+	Timezone    string  `json:"tz,omitempty"`
+	PostalCode  string  `json:"pc,omitempty"`
+	Accuracy    string  `json:"ac,omitempty"`
+	ASN         string  `json:"as,omitempty"`
+	ISP         string  `json:"is,omitempty"`
+	// ipapi.is supplies the whole set; ip2location.io only knows about
+	// proxies. A nil pointer means unknown, which is not the same as false.
+	Risk    *riskFlags `json:"rk,omitempty"`
+	IsProxy *bool      `json:"px,omitempty"`
 }
 
 // flat renders the public response shape.
 func (record *geoRecord) flat() map[string]any {
 	value := map[string]any{
 		"ip":           record.IP,
-		"continent":    record.Continent,
 		"country_code": record.CountryCode,
 		"country":      record.Country,
 		"latitude":     record.Latitude,
 		"longitude":    record.Longitude,
 	}
 	for key, text := range map[string]string{
-		"region": record.Region, "city": record.City, "timezone": record.Timezone,
+		"continent": record.Continent,
+		"region":    record.Region, "city": record.City, "timezone": record.Timezone,
 		"postal_code": record.PostalCode, "accuracy": record.Accuracy,
 		"asn": record.ASN, "isp": record.ISP,
 	} {
 		if text != "" {
 			value[key] = text
 		}
+	}
+	if record.Risk == nil && record.IsProxy != nil {
+		value["is_proxy"] = *record.IsProxy
 	}
 	if risk := record.Risk; risk != nil {
 		value["is_datacenter"] = risk.IsDatacenter
@@ -355,14 +366,17 @@ func (flight *singleFlight) do(key string, fn func() (*geoRecord, error)) (*geoR
 
 // -------------------------------------------------------------- ipapi.is
 
-// upstreamClient talks to ipapi.is. It counts the daily budget locally because
-// the API publishes no quota headers at all, and stops calling for a minute
-// after repeated failures.
+// upstreamClient wraps one geolocation provider with a daily budget, a
+// concurrency cap and a breaker. Neither provider publishes quota headers, so
+// the budget is counted here. fetch does the provider-specific request and
+// parsing; everything else is shared.
 type upstreamClient struct {
+	name     string
 	endpoint string
 	key      string
 	client   *http.Client
 	inflight chan struct{}
+	fetch    func(*upstreamClient, net.IP) (*geoRecord, error)
 
 	mu        sync.Mutex
 	failures  int
@@ -372,8 +386,11 @@ type upstreamClient struct {
 	limit     int
 }
 
-func newUpstreamClient(endpoint, key string, timeout time.Duration, dailyLimit, maxInflight int) *upstreamClient {
+func newUpstreamClient(name, endpoint, key string, timeout time.Duration, dailyLimit, maxInflight int,
+	fetch func(*upstreamClient, net.IP) (*geoRecord, error)) *upstreamClient {
 	return &upstreamClient{
+		name:     name,
+		fetch:    fetch,
 		endpoint: strings.TrimRight(endpoint, "/"),
 		key:      key,
 		limit:    dailyLimit,
@@ -396,7 +413,7 @@ func (upstream *upstreamClient) admit() error {
 	upstream.mu.Lock()
 	defer upstream.mu.Unlock()
 	if time.Now().Before(upstream.openUntil) {
-		return errors.New("ipapi.is is in cooldown")
+		return fmt.Errorf("%s is in cooldown", upstream.name)
 	}
 	if upstream.limit > 0 {
 		today := time.Now().UTC().Format(time.DateOnly)
@@ -408,7 +425,7 @@ func (upstream *upstreamClient) admit() error {
 		}
 		upstream.used++
 		if upstream.used%500 == 0 || upstream.used == upstream.limit {
-			log.Printf("ipapi.is usage today: %d/%d", upstream.used, upstream.limit)
+			log.Printf("%s usage today: %d/%d", upstream.name, upstream.used, upstream.limit)
 		}
 	}
 	return nil
@@ -427,7 +444,7 @@ func (upstream *upstreamClient) failed() {
 	if upstream.failures >= breakerTrip {
 		upstream.openUntil = time.Now().Add(breakerCooldown)
 		upstream.failures = 0
-		log.Printf("ipapi.is disabled for %s after repeated failures", breakerCooldown)
+		log.Printf("%s disabled for %s after repeated failures", upstream.name, breakerCooldown)
 	}
 }
 
@@ -448,23 +465,170 @@ func (upstream *upstreamClient) redact(err error) error {
 	return errors.New(redacted)
 }
 
-func (upstream *upstreamClient) lookup(ip net.IP) (*upstreamRecord, error) {
+func (upstream *upstreamClient) lookup(ip net.IP) (*geoRecord, error) {
 	if err := upstream.admit(); err != nil {
 		return nil, err
 	}
-	// Bounded concurrency: ipapi.is limits bursts per source IP, and everything
-	// here leaves from one address.
+	// Bounded concurrency: providers rate-limit bursts per source IP, and
+	// everything here leaves from one address.
 	select {
 	case upstream.inflight <- struct{}{}:
 		defer func() { <-upstream.inflight }()
 	case <-time.After(upstream.client.Timeout):
-		return nil, errors.New("ipapi.is concurrency limit reached")
+		return nil, fmt.Errorf("%s concurrency limit reached", upstream.name)
 	}
-	record, err := upstream.request(ip)
+	record, err := upstream.fetch(upstream, ip)
 	return record, upstream.redact(err)
 }
 
-func (upstream *upstreamClient) request(ip net.IP) (*upstreamRecord, error) {
+// body performs the HTTP round trip shared by both providers.
+func (upstream *upstreamClient) body(request *http.Request) ([]byte, error) {
+	response, err := upstream.client.Do(request)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	if response.StatusCode != http.StatusOK {
+		// Keep the provider's own wording; an invalid key says so.
+		text := strings.TrimSpace(string(raw))
+		if len(text) > 200 {
+			text = text[:200] + "…"
+		}
+		return nil, fmt.Errorf("%s returned HTTP %d: %s", upstream.name, response.StatusCode, text)
+	}
+	return raw, nil
+}
+
+// ---- ip2location.io（主源）
+
+// ip2LocationRecord mirrors the free-tier response.
+type ip2LocationRecord struct {
+	CountryCode string  `json:"country_code"`
+	CountryName string  `json:"country_name"`
+	RegionName  string  `json:"region_name"`
+	CityName    string  `json:"city_name"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	ZipCode     string  `json:"zip_code"`
+	TimeZone    string  `json:"time_zone"`
+	ASN         string  `json:"asn"`
+	AS          string  `json:"as"`
+	IsProxy     bool    `json:"is_proxy"`
+	Error       struct {
+		Code    int    `json:"error_code"`
+		Message string `json:"error_message"`
+	} `json:"error"`
+}
+
+func fetchIP2Location(upstream *upstreamClient, ip net.IP) (*geoRecord, error) {
+	query := url.Values{}
+	query.Set("ip", ip.String())
+	query.Set("key", upstream.key)
+	request, err := http.NewRequest(http.MethodGet, upstream.endpoint+"/?"+query.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := upstream.body(request)
+	if err != nil {
+		return nil, err
+	}
+	var record ip2LocationRecord
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return nil, err
+	}
+	if record.Error.Message != "" {
+		return nil, fmt.Errorf("ip2location.io: %s (%d)", record.Error.Message, record.Error.Code)
+	}
+	if record.CountryCode == "" || record.CountryCode == "-" {
+		return nil, errUpstreamNoData
+	}
+	proxy := record.IsProxy
+	asn := ""
+	if record.ASN != "" && record.ASN != "-" {
+		asn = "AS" + record.ASN
+	}
+	// The free tier reports a UTC offset rather than an IANA zone name.
+	timezone := record.TimeZone
+	if strings.HasPrefix(timezone, "+") || strings.HasPrefix(timezone, "-") {
+		timezone = "UTC" + timezone
+	}
+	return &geoRecord{
+		IP:          ip.String(),
+		CountryCode: strings.ToUpper(record.CountryCode),
+		Country:     record.CountryName,
+		Region:      record.RegionName,
+		City:        record.CityName,
+		Latitude:    record.Latitude,
+		Longitude:   record.Longitude,
+		Timezone:    timezone,
+		PostalCode:  strings.TrimPrefix(record.ZipCode, "-"),
+		ASN:         asn,
+		ISP:         record.AS,
+		IsProxy:     &proxy,
+	}, nil
+}
+
+// ---- cnip.io（自建 ip2region 服务，无配额）
+
+// cnipRecord mirrors the /geoip/ response. Latitude and longitude arrive as
+// strings, and country/continent/isp are Chinese even for non-Chinese
+// addresses; the extension renders a country name from country_code instead.
+type cnipRecord struct {
+	ASN         string `json:"asn"`
+	ISP         string `json:"isp"`
+	Continent   string `json:"continent"`
+	CountryCode string `json:"country_code"`
+	Country     string `json:"country"`
+	Region      string `json:"region"`
+	Province    string `json:"province"`
+	City        string `json:"city"`
+	PostalCode  string `json:"postal_code"`
+	Latitude    string `json:"latitude"`
+	Longitude   string `json:"longitude"`
+	Timezone    string `json:"timezone"`
+}
+
+func fetchCnip(upstream *upstreamClient, ip net.IP) (*geoRecord, error) {
+	request, err := http.NewRequest(http.MethodGet, upstream.endpoint+"/geoip/"+url.PathEscape(ip.String()), nil)
+	if err != nil {
+		return nil, err
+	}
+	raw, err := upstream.body(request)
+	if err != nil {
+		return nil, err
+	}
+	var record cnipRecord
+	if err := json.Unmarshal(raw, &record); err != nil {
+		return nil, err
+	}
+	if record.CountryCode == "" {
+		return nil, errUpstreamNoData
+	}
+	latitude, _ := strconv.ParseFloat(record.Latitude, 64)
+	longitude, _ := strconv.ParseFloat(record.Longitude, 64)
+	return &geoRecord{
+		IP:          ip.String(),
+		Continent:   record.Continent,
+		CountryCode: strings.ToUpper(record.CountryCode),
+		Country:     record.Country,
+		Region:      firstNonEmpty(record.Region, record.Province),
+		City:        record.City,
+		Latitude:    latitude,
+		Longitude:   longitude,
+		Timezone:    record.Timezone,
+		PostalCode:  record.PostalCode,
+		ASN:         record.ASN,
+		ISP:         record.ISP,
+	}, nil
+}
+
+// ---- ipapi.is（兜底）
+
+func fetchIPAPIIs(upstream *upstreamClient, ip net.IP) (*geoRecord, error) {
 	// POST keeps the key out of the query string, so it never reaches the
 	// upstream access log, a proxy, or a *url.Error. Header authentication is
 	// silently ignored by ipapi.is — it would downgrade to the anonymous tier
@@ -478,25 +642,12 @@ func (upstream *upstreamClient) request(ip net.IP) (*upstreamRecord, error) {
 		return nil, err
 	}
 	request.Header.Set("Content-Type", "application/json")
-	response, err := upstream.client.Do(request)
+	raw, err := upstream.body(request)
 	if err != nil {
 		return nil, err
-	}
-	defer response.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(response.Body, 1<<20))
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode != http.StatusOK {
-		// Keep the upstream's own wording; an invalid key says so.
-		text := strings.TrimSpace(string(body))
-		if len(text) > 200 {
-			text = text[:200] + "…"
-		}
-		return nil, fmt.Errorf("ipapi.is returned HTTP %d: %s", response.StatusCode, text)
 	}
 	var record upstreamRecord
-	if err := json.Unmarshal(body, &record); err != nil {
+	if err := json.Unmarshal(raw, &record); err != nil {
 		return nil, err
 	}
 	if record.Error != "" {
@@ -505,17 +656,13 @@ func (upstream *upstreamClient) request(ip net.IP) (*upstreamRecord, error) {
 	if record.IsBogon || record.Location.CountryCode == "" {
 		return nil, errUpstreamNoData
 	}
-	return &record, nil
-}
-
-func upstreamGeoRecord(ip string, record *upstreamRecord) *geoRecord {
 	location := record.Location
 	asn := ""
 	if record.ASN.Number != 0 {
 		asn = "AS" + strconv.FormatUint(uint64(record.ASN.Number), 10)
 	}
 	return &geoRecord{
-		IP:          ip,
+		IP:          ip.String(),
 		Continent:   location.Continent,
 		CountryCode: strings.ToUpper(location.CountryCode),
 		Country:     location.Country,
@@ -537,13 +684,14 @@ func upstreamGeoRecord(ip string, record *upstreamRecord) *geoRecord {
 			Datacenter:   record.Datacenter.Datacenter,
 			AbuserScore:  firstNonEmpty(record.Company.AbuserScore, record.ASN.AbuserScore),
 		},
-	}
+	}, nil
 }
 
 // ---------------------------------------------------------------- service
 
 type geoService struct {
-	upstream *upstreamClient
+	// Tried in order; the first one that answers wins.
+	sources  []*upstreamClient
 	cache    *geoCache
 	cacheTTL time.Duration
 	group    *singleFlight
@@ -557,21 +705,41 @@ type sslCacheEntry struct {
 }
 
 func openService() (*geoService, error) {
-	key := os.Getenv("IPAPI_IS_KEY")
-	if key == "" {
-		return nil, errors.New("IPAPI_IS_KEY is required: ipapi.is is the only geolocation source")
-	}
 	cache, err := openCache(env("GEO_CACHE_PATH", defaultCachePath), envInt("GEO_CACHE_MAX", defaultCacheMax, 1))
 	if err != nil {
 		return nil, fmt.Errorf("open geo cache: %w", err)
 	}
-	limit := envInt("IPAPI_IS_DAILY_LIMIT", defaultDailyLimit, 0)
-	inflight := envInt("IPAPI_IS_MAX_INFLIGHT", defaultMaxInflight, 1)
-	log.Printf("ipapi.is is the only source, daily limit %d, at most %d concurrent requests", limit, inflight)
+	timeout := envDuration("UPSTREAM_TIMEOUT", defaultUpstreamTimeout)
+	inflight := envInt("UPSTREAM_MAX_INFLIGHT", defaultMaxInflight, 1)
+
+	var sources []*upstreamClient
+	add := func(name, endpoint, key string, limit int, fetch func(*upstreamClient, net.IP) (*geoRecord, error)) {
+		sources = append(sources, newUpstreamClient(name, endpoint, key, timeout, limit, inflight, fetch))
+	}
+	if key := os.Getenv("IP2LOCATION_KEY"); key != "" {
+		// The free tier is a monthly pool; a daily cap spreads it over the month
+		// instead of letting a busy week exhaust it.
+		add("ip2location.io", env("IP2LOCATION_URL", defaultIP2LocationURL), key,
+			envInt("IP2LOCATION_DAILY_LIMIT", defaultIP2LocationDaily, 0), fetchIP2Location)
+	}
+	if endpoint := env("CNIP_URL", defaultCnipURL); endpoint != "" {
+		add("cnip.io", endpoint, "", envInt("CNIP_DAILY_LIMIT", 0, 0), fetchCnip)
+	}
+	if key := os.Getenv("IPAPI_IS_KEY"); key != "" {
+		add("ipapi.is", env("IPAPI_IS_URL", defaultIPAPIIsURL), key,
+			envInt("IPAPI_IS_DAILY_LIMIT", defaultIPAPIIsDaily, 0), fetchIPAPIIs)
+	}
+	if len(sources) == 0 {
+		return nil, errors.New("no geolocation source configured")
+	}
+	names := make([]string, len(sources))
+	for i, source := range sources {
+		names[i] = fmt.Sprintf("%s(%d/day)", source.name, source.limit)
+	}
+	log.Printf("geolocation sources in order: %s", strings.Join(names, " → "))
+
 	return &geoService{
-		upstream: newUpstreamClient(env("IPAPI_IS_URL", defaultUpstreamURL), key,
-			envDuration("IPAPI_IS_TIMEOUT", defaultUpstreamTimeout), limit, inflight),
-		cache:    cache,
+		sources: sources, cache: cache,
 		cacheTTL: envDuration("GEO_CACHE_TTL", defaultGeoCacheTTL),
 		group:    newSingleFlight(),
 		sslCache: make(map[string]sslCacheEntry),
@@ -613,28 +781,48 @@ func (service *geoService) lookup(ip net.IP) (*geoRecord, error) {
 			}
 			return record, nil
 		}
-		record, err := service.upstream.lookup(ip)
+		var record *geoRecord
+		var err error
+		for _, source := range service.sources {
+			record, err = service.query(source, ip)
+			if err == nil {
+				break
+			}
+			// "No record here" is an answer, not a failure. Every source draws
+			// on the same registry data, so asking the next one rarely helps and
+			// would spend a request on every intranet address.
+			if errors.Is(err, errUpstreamNoData) {
+				break
+			}
+		}
 		switch {
 		case err == nil:
-			service.upstream.succeeded()
-			resolved := upstreamGeoRecord(key, record)
-			service.cache.put(key, resolved, service.cacheTTL)
-			return resolved, nil
+			service.cache.put(key, record, service.cacheTTL)
+			return record, nil
 		case errors.Is(err, errUpstreamNoData):
-			service.upstream.succeeded() // healthy, just no record for this address
 			service.cache.put(key, nil, noDataCacheTTL)
 			return nil, errNoGeoData
-		case errors.Is(err, errUpstreamQuota):
-			// Nothing to cache: the budget rolls over at UTC midnight.
-			return nil, errNoGeoData
 		default:
-			service.upstream.failed()
-			log.Printf("ipapi.is lookup for %s failed: %v", key, err)
-			// Not cached either, so the next request retries once the breaker
-			// closes rather than serving a hole for ten minutes.
+			// Not cached, so the next request retries once a breaker closes
+			// rather than serving a hole.
 			return nil, errNoGeoData
 		}
 	})
+}
+
+// query runs one provider and records the outcome against its breaker.
+func (service *geoService) query(upstream *upstreamClient, ip net.IP) (*geoRecord, error) {
+	record, err := upstream.lookup(ip)
+	switch {
+	case err == nil, errors.Is(err, errUpstreamNoData):
+		upstream.succeeded() // answered, even if the answer is "not found"
+	case errors.Is(err, errUpstreamQuota):
+		// Expected once a day at worst; the budget rolls over at UTC midnight.
+	default:
+		upstream.failed()
+		log.Printf("%s lookup for %s failed: %v", upstream.name, ip, err)
+	}
+	return record, err
 }
 
 func cleanDomain(raw string) (string, error) {
