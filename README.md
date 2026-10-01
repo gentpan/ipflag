@@ -158,4 +158,4 @@ The latest listing artwork is available under [`store-assets/chrome-web-store/`]
 
 ## License
 
-No open-source license has been declared yet. Unless a license is added, the project remains all rights reserved by the project owner.
+All rights reserved.
